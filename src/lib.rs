@@ -4,6 +4,7 @@ use std::str;
 
 pub struct Options {
     pub statik: bool,
+    pub atleast_version: Option<String>,
 }
 
 pub fn find_library(name: &str) -> Result<(), String> {
@@ -21,6 +22,10 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
     cmd.arg("--libs")
        .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1")
        .arg(name);
+    match options.atleast_version {
+        Some(ref v) => { cmd.arg(format!("--atleast-version={}", v)); }
+        None => {}
+    }
     let out = try!(cmd.output().map_err(|e| {
         format!("failed to run `{}`: {}", cmd, e)
     }));
@@ -68,7 +73,7 @@ pub fn default_options(name: &str) -> Options {
     } else {
         false
     };
-    Options { statik: statik }
+    Options { statik: statik, atleast_version: None }
 }
 
 fn envify(name: &str) -> String {
