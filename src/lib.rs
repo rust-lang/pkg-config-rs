@@ -41,10 +41,15 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
     }
 
     for arg in stdout.split(' ').filter(|l| !l.is_empty()) {
+        let val = arg.slice_from(2);
         if arg.starts_with("-l") {
-            println!("cargo:rustc-args=-l {}", arg.slice_from(2));
+            if options.statik {
+                println!("cargo:rustc-args=-l {}:static", val);
+            } else {
+                println!("cargo:rustc-args=-l {}", val);
+            }
         } else if arg.starts_with("-L") {
-            println!("cargo:rustc-args=-L {}", arg.slice_from(2));
+            println!("cargo:rustc-args=-L {}", val);
         }
     }
     Ok(())
