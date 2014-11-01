@@ -44,12 +44,12 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
         let val = arg.slice_from(2);
         if arg.starts_with("-l") {
             if options.statik {
-                println!("cargo:rustc-args=-l {}:static", val);
+                println!("cargo:rustc-flags=-l {}:static", val);
             } else {
-                println!("cargo:rustc-args=-l {}", val);
+                println!("cargo:rustc-flags=-l {}", val);
             }
         } else if arg.starts_with("-L") {
-            println!("cargo:rustc-args=-L {}", val);
+            println!("cargo:rustc-flags=-L {}", val);
         }
     }
     Ok(())
@@ -66,7 +66,7 @@ pub fn default_options(name: &str) -> Options {
     } else if os::getenv("PKG_CONFIG_ALL_DYNAMIC").is_some() {
         false
     } else {
-        true
+        false
     };
     Options { statik: statik }
 }
