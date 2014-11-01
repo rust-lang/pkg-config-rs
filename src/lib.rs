@@ -40,7 +40,7 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
         return Err(msg)
     }
 
-    for arg in stdout.split(' ').filter(|l| !l.is_empty()) {
+    for arg in stdout.split(' ').filter(|l| !l.is_empty() && l.len() > 2) {
         let val = arg.slice_from(2);
         if arg.starts_with("-l") {
             if options.statik {
