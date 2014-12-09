@@ -2,6 +2,11 @@ use std::io::Command;
 use std::os;
 use std::str;
 
+pub fn target_supported() -> bool {
+    os::getenv("HOST") == os::getenv("TARGET") ||
+        os::getenv("PKG_CONFIG_ALLOW_CROSS") == Some("1".to_string())
+}
+
 pub struct Options {
     pub statik: bool,
     pub atleast_version: Option<String>,
@@ -14,6 +19,9 @@ pub fn find_library(name: &str) -> Result<(), String> {
 pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
     if os::getenv(format!("{}_NO_PKG_CONFIG", envify(name)).as_slice()).is_some() {
         return Err(format!("pkg-config requested to be aborted for {}", name))
+    } else if !target_supported() {
+        return Err("pkg-config doesn't handle cross compilation. Use \
+                    PKG_CONFIG_ALLOW_CROSS=1 to override".to_string());
     }
     let mut cmd = Command::new("pkg-config");
     if options.statik {
