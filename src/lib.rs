@@ -1,4 +1,7 @@
+#![feature(slicing_syntax)]
+
 use std::io::Command;
+use std::io::fs::PathExtensions;
 use std::os;
 use std::str;
 
@@ -53,16 +56,23 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
         return Err(msg)
     }
 
-    for arg in stdout.split(' ').filter(|l| !l.is_empty() && l.len() > 2) {
-        let val = arg.slice_from(2);
-        if arg.starts_with("-l") {
-            if options.statik {
+    let mut dirs = Vec::new();
+    let parts = stdout.split(' ').filter(|l| !l.is_empty() && l.len() > 2)
+                      .map(|arg| (arg[0..2], arg[2..]))
+                      .collect::<Vec<_>>();
+    for &(flag, val) in parts.iter() {
+        if flag == "-L" {
+            println!("cargo:rustc-flags=-L {}", val);
+            dirs.push(Path::new(val));
+        }
+    }
+    for &(flag, val) in parts.iter() {
+        if flag == "-l" {
+            if options.statik && !is_system_lib(val, dirs[]) {
                 println!("cargo:rustc-flags=-l {}:static", val);
             } else {
                 println!("cargo:rustc-flags=-l {}", val);
             }
-        } else if arg.starts_with("-L") {
-            println!("cargo:rustc-flags=-L {}", val);
         }
     }
     Ok(())
@@ -87,4 +97,12 @@ pub fn default_options(name: &str) -> Options {
 fn envify(name: &str) -> String {
     name.chars().map(|c| c.to_uppercase()).map(|c| if c == '-' {'_'} else {c})
         .collect()
+}
+
+fn is_system_lib(name: &str, dirs: &[Path]) -> bool {
+    let libname = format!("lib{}.a", name);
+    let root = Path::new("/usr");
+    !dirs.iter().any(|d| {
+        !root.is_ancestor_of(d) && d.join(&libname).exists()
+    })
 }
