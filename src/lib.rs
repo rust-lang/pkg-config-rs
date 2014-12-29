@@ -103,6 +103,6 @@ fn is_system_lib(name: &str, dirs: &[Path]) -> bool {
     let libname = format!("lib{}.a", name);
     let root = Path::new("/usr");
     !dirs.iter().any(|d| {
-        !root.is_ancestor_of(d) && d.join(&libname).exists()
+        !root.is_ancestor_of(d) && d.join(libname.as_slice()).exists()
     })
 }
