@@ -62,7 +62,7 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
                       .collect::<Vec<_>>();
     for &(flag, val) in parts.iter() {
         if flag == "-L" {
-            println!("cargo:rustc-flags=-L {}", val);
+            println!("cargo:rustc-flags=-L native={}", val);
             dirs.push(Path::new(val));
         }
     }
