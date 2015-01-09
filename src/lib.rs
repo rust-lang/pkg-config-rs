@@ -1,4 +1,4 @@
-#![feature(slicing_syntax)]
+#![allow(unstable)]
 
 use std::io::Command;
 use std::io::fs::PathExtensions;
@@ -58,7 +58,7 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
 
     let mut dirs = Vec::new();
     let parts = stdout.split(' ').filter(|l| !l.is_empty() && l.len() > 2)
-                      .map(|arg| (arg[0..2], arg[2..]))
+                      .map(|arg| (&arg[0..2], &arg[2..]))
                       .collect::<Vec<_>>();
     for &(flag, val) in parts.iter() {
         if flag == "-L" {
@@ -68,7 +68,7 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
     }
     for &(flag, val) in parts.iter() {
         if flag == "-l" {
-            if options.statik && !is_system_lib(val, dirs[]) {
+            if options.statik && !is_system_lib(val, &dirs[]) {
                 println!("cargo:rustc-flags=-l {}:static", val);
             } else {
                 println!("cargo:rustc-flags=-l {}", val);
