@@ -31,11 +31,10 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
         cmd.arg("--static");
     }
     cmd.arg("--libs")
-       .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1")
-       .arg(name);
+       .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
     match options.atleast_version {
-        Some(ref v) => { cmd.arg(format!("--atleast-version={}", v)); }
-        None => {}
+        Some(ref v) => { cmd.arg(format!("{} >= {}", name, v)); }
+        None => { cmd.arg(name); }
     }
     let out = try!(cmd.output().map_err(|e| {
         format!("failed to run `{}`: {}", cmd, e)
