@@ -69,7 +69,7 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
     for &(flag, val) in parts.iter() {
         if flag == "-l" {
             if options.statik && !is_system_lib(val, &dirs[]) {
-                println!("cargo:rustc-flags=-l {}:static", val);
+                println!("cargo:rustc-flags=-l static={}", val);
             } else {
                 println!("cargo:rustc-flags=-l {}", val);
             }
