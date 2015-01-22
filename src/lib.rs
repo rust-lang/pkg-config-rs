@@ -37,12 +37,12 @@ pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
         None => { cmd.arg(name); }
     }
     let out = try!(cmd.output().map_err(|e| {
-        format!("failed to run `{}`: {}", cmd, e)
+        format!("failed to run `{:?}`: {}", cmd, e)
     }));
     let stdout = str::from_utf8(out.output.as_slice()).unwrap();
     let stderr = str::from_utf8(out.error.as_slice()).unwrap();
     if !out.status.success() {
-        let mut msg = format!("`{}` did not exit successfully: {}", cmd,
+        let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
                               out.status);
         if stdout.len() > 0 {
             msg.push_str("\n--- stdout\n");
