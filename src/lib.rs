@@ -1,7 +1,7 @@
 #![allow(unstable)]
 
-use std::io::Command;
-use std::io::fs::PathExtensions;
+use std::old_io::Command;
+use std::old_io::fs::PathExtensions;
 use std::os;
 use std::str;
 
