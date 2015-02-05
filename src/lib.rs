@@ -1,96 +1,192 @@
-#![allow(unstable)]
+//! A build dependency for Cargo libraries to find system artifacts through the
+//! `pkg-config` utility.
+//!
+//! This library will shell out to `pkg-config` as part of build scripts and
+//! probe the system to determine how to link to a specified library. The
+//! `Config` structure serves as a method of configuring how `pkg-config` is
+//! invoked in a builder style.
+//!
+//! A number of environment variables are available to globally configure how
+//! this crate will invoke `pkg-config`:
+//!
+//! * `PKG_CONFIG_ALLOW_CROSS` - if this variable is not set, then `pkg-config`
+//!   will automatically be disabled for all cross compiles.
+//! * `FOO_NO_PKG_CONFIG` - if set, this will disable running `pkg-config` when
+//!   probing for the library named `foo`.
+//!
+//! There are also a number of environment variables which can configure how a
+//! library is linked to (dynamically vs statically). These variables control
+//! whether the `--static` flag is passed. Note that this behavior can be
+//! overridden by configuring explicitly on `Config`. The variables are checked
+//! in the following order:
+//!
+//! * `FOO_STATIC` - pass `--static` for the library `foo`
+//! * `FOO_DYNAMIC` - do not pass `--static` for the library `foo`
+//! * `PKG_CONFIG_ALL_STATIC` - pass `--static` for all libraries
+//! * `PKG_CONFIG_ALL_DYNAMIC` - do not pass `--static` for all libraries
+//!
+//! After running `pkg-config` all appropriate Cargo metadata will be printed on
+//! stdout if the search was successful.
+//!
+//! # Example
+//!
+//! Find the system library named `foo`.
+//!
+//! ```no_run
+//! extern crate "pkg-config" as pkg_config;
+//!
+//! fn main() {
+//!     pkg_config::find_library("foo").unwrap();
+//! }
+//! ```
+//!
+//! Configure how library `foo` is linked to.
+//!
+//! ```no_run
+//! extern crate "pkg-config" as pkg_config;
+//!
+//! fn main() {
+//!     pkg_config::Config::new().statik(true).find("foo").unwrap();
+//! }
+//! ```
+
+#![feature(env, io, path, core, unicode)]
+#![cfg_attr(test, deny(warnings))]
 
 use std::old_io::Command;
 use std::old_io::fs::PathExtensions;
-use std::os;
+use std::env;
 use std::str;
 
 pub fn target_supported() -> bool {
-    os::getenv("HOST") == os::getenv("TARGET") ||
-        os::getenv("PKG_CONFIG_ALLOW_CROSS") == Some("1".to_string())
+    env::var("HOST") == env::var("TARGET") ||
+        env::var("PKG_CONFIG_ALLOW_CROSS").is_some()
 }
 
-pub struct Options {
-    pub statik: bool,
-    pub atleast_version: Option<String>,
+#[derive(Clone)]
+pub struct Config {
+    statik: Option<bool>,
+    atleast_version: Option<String>,
 }
 
+/// Simple shortcut for using all default options for finding a library.
 pub fn find_library(name: &str) -> Result<(), String> {
-    find_library_opts(name, &default_options(name))
+    Config::new().find(name)
 }
 
-pub fn find_library_opts(name: &str, options: &Options) -> Result<(), String> {
-    if os::getenv(format!("{}_NO_PKG_CONFIG", envify(name)).as_slice()).is_some() {
-        return Err(format!("pkg-config requested to be aborted for {}", name))
-    } else if !target_supported() {
-        return Err("pkg-config doesn't handle cross compilation. Use \
-                    PKG_CONFIG_ALLOW_CROSS=1 to override".to_string());
-    }
-    let mut cmd = Command::new("pkg-config");
-    if options.statik {
-        cmd.arg("--static");
-    }
-    cmd.arg("--libs")
-       .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
-    match options.atleast_version {
-        Some(ref v) => { cmd.arg(format!("{} >= {}", name, v)); }
-        None => { cmd.arg(name); }
-    }
-    let out = try!(cmd.output().map_err(|e| {
-        format!("failed to run `{:?}`: {}", cmd, e)
-    }));
-    let stdout = str::from_utf8(out.output.as_slice()).unwrap();
-    let stderr = str::from_utf8(out.error.as_slice()).unwrap();
-    if !out.status.success() {
-        let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
-                              out.status);
-        if stdout.len() > 0 {
-            msg.push_str("\n--- stdout\n");
-            msg.push_str(stdout);
+impl Config {
+    /// Creates a new set of configuration options which are all initially set
+    /// to "blank".
+    pub fn new() -> Config {
+        Config {
+            statik: None,
+            atleast_version: None,
         }
-        if stderr.len() > 0 {
-            msg.push_str("\n--- stderr\n");
-            msg.push_str(stderr);
-        }
-        return Err(msg)
     }
 
-    let mut dirs = Vec::new();
-    let parts = stdout.split(' ').filter(|l| !l.is_empty() && l.len() > 2)
-                      .map(|arg| (&arg[0..2], &arg[2..]))
-                      .collect::<Vec<_>>();
-    for &(flag, val) in parts.iter() {
-        if flag == "-L" {
-            println!("cargo:rustc-flags=-L native={}", val);
-            dirs.push(Path::new(val));
-        }
+    /// Indicate whether the `--static` flag should be passed.
+    ///
+    /// This will override the inference from environment variables described in
+    /// the crate documentation.
+    pub fn statik(&mut self, statik: bool) -> &mut Config {
+        self.statik = Some(statik);
+        self
     }
-    for &(flag, val) in parts.iter() {
-        if flag == "-l" {
-            if options.statik && !is_system_lib(val, &dirs[]) {
-                println!("cargo:rustc-flags=-l static={}", val);
-            } else {
-                println!("cargo:rustc-flags=-l {}", val);
+
+    /// Indicate that the library must be at least version `vers`.
+    pub fn atleast_version(&mut self, vers: &str) -> &mut Config {
+        self.atleast_version = Some(vers.to_string());
+        self
+    }
+
+    /// Run `pkg-config` to find the library `name`.
+    ///
+    /// This will use all configuration previously set to specify how
+    /// `pkg-config` is run.
+    pub fn find(&self, name: &str) -> Result<(), String> {
+        if env::var(&format!("{}_NO_PKG_CONFIG", envify(name))).is_some() {
+            return Err(format!("pkg-config requested to be aborted for {}", name))
+        } else if !target_supported() {
+            return Err("pkg-config doesn't handle cross compilation. Use \
+                        PKG_CONFIG_ALLOW_CROSS=1 to override".to_string());
+        }
+
+        let mut cmd = Command::new("pkg-config");
+        let statik = self.statik.unwrap_or(infer_static(name));
+        if statik {
+            cmd.arg("--static");
+        }
+        cmd.arg("--libs")
+           .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
+        match self.atleast_version {
+            Some(ref v) => { cmd.arg(format!("{} >= {}", name, v)); }
+            None => { cmd.arg(name); }
+        }
+        let out = try!(cmd.output().map_err(|e| {
+            format!("failed to run `{:?}`: {}", cmd, e)
+        }));
+        let stdout = str::from_utf8(&out.output).unwrap();
+        let stderr = str::from_utf8(&out.error).unwrap();
+        if !out.status.success() {
+            let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
+                                  out.status);
+            if stdout.len() > 0 {
+                msg.push_str("\n--- stdout\n");
+                msg.push_str(stdout);
+            }
+            if stderr.len() > 0 {
+                msg.push_str("\n--- stderr\n");
+                msg.push_str(stderr);
+            }
+            return Err(msg)
+        }
+
+        let mut dirs = Vec::new();
+        let parts = stdout.split(' ').filter(|l| l.len() > 2)
+                          .map(|arg| (&arg[0..2], &arg[2..]))
+                          .collect::<Vec<_>>();
+        for &(flag, val) in parts.iter() {
+            if flag == "-L" {
+                println!("cargo:rustc-flags=-L native={}", val);
+                dirs.push(Path::new(val));
+            } else if flag == "-F" {
+                println!("cargo:rustc-flags=-L framework={}", val);
             }
         }
+        for &(flag, val) in parts.iter() {
+            if flag == "-l" {
+                if statik && !is_system_lib(val, &dirs[]) {
+                    println!("cargo:rustc-flags=-l static={}", val);
+                } else {
+                    println!("cargo:rustc-flags=-l {}", val);
+                }
+            }
+        }
+        let mut iter = stdout.split(' ');
+        while let Some(part) = iter.next() {
+            if part != "-framework" { continue }
+            if let Some(lib) = iter.next() {
+                println!("cargo:rustc-flags=-l framework={}", lib);
+            }
+        }
+
+        Ok(())
     }
-    Ok(())
 }
 
-pub fn default_options(name: &str) -> Options {
+fn infer_static(name: &str) -> bool {
     let name = envify(name);
-    let statik = if os::getenv(format!("{}_STATIC", name).as_slice()).is_some() {
+    if env::var(&format!("{}_STATIC", name)).is_some() {
         true
-    } else if os::getenv(format!("{}_DYNAMIC", name).as_slice()).is_some() {
+    } else if env::var(&format!("{}_DYNAMIC", name)).is_some() {
         false
-    } else if os::getenv("PKG_CONFIG_ALL_STATIC").is_some() {
+    } else if env::var("PKG_CONFIG_ALL_STATIC").is_some() {
         true
-    } else if os::getenv("PKG_CONFIG_ALL_DYNAMIC").is_some() {
+    } else if env::var("PKG_CONFIG_ALL_DYNAMIC").is_some() {
         false
     } else {
         false
-    };
-    Options { statik: statik, atleast_version: None }
+    }
 }
 
 fn envify(name: &str) -> String {
