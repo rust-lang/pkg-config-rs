@@ -23,7 +23,7 @@ fn reset() {
     env::set_var("PKG_CONFIG_PATH", &env::current_dir().unwrap().join("tests"));
 }
 
-fn find(name: &str) -> Result<String, String> {
+fn find(name: &str) -> Result<pkg_config::Library, String> {
     let (tx, rx) = channel();
     let (tx2, rx2) = channel();
     let name = name.to_string();
@@ -36,7 +36,7 @@ fn find(name: &str) -> Result<String, String> {
     for msg in rx.iter() {
         output.extend(msg.into_iter());
     }
-    ret.map(|()| String::from_utf8(output).unwrap())
+    ret
 }
 
 #[test]
@@ -70,17 +70,17 @@ fn package_disabled() {
 fn output_ok() {
     let _g = LOCK.lock();
     reset();
-    let output = find("foo").unwrap();
-    assert!(output.contains("cargo:rustc-flags=-l gcc"));
-    assert!(output.contains("cargo:rustc-flags=-L native=/usr/lib/valgrind"));
-    assert!(output.contains("cargo:rustc-flags=-l coregrind-amd64-linux"));
+    let lib = find("foo").unwrap();
+    assert!(lib.libs.contains(&"gcc".to_string()));
+    assert!(lib.libs.contains(&"coregrind-amd64-linux".to_string()));
+    assert!(lib.link_paths.contains(&Path::new("/usr/lib/valgrind")));
 }
 
 #[test]
 fn framework() {
     let _g = LOCK.lock();
     reset();
-    let output = find("framework").unwrap();
-    assert!(output.contains("cargo:rustc-flags=-L framework=/usr/lib"));
-    assert!(output.contains("cargo:rustc-flags=-l framework=foo"));
+    let lib = find("framework").unwrap();
+    assert!(lib.frameworks.contains(&"foo".to_string()));
+    assert!(lib.framework_paths.contains(&Path::new("/usr/lib")));
 }

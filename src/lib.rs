@@ -69,8 +69,18 @@ pub struct Config {
     atleast_version: Option<String>,
 }
 
+#[derive(Debug)]
+pub struct Library {
+    pub libs: Vec<String>,
+    pub link_paths: Vec<Path>,
+    pub frameworks: Vec<String>,
+    pub framework_paths: Vec<Path>,
+    pub include_paths: Vec<Path>,
+    _priv: (),
+}
+
 /// Simple shortcut for using all default options for finding a library.
-pub fn find_library(name: &str) -> Result<(), String> {
+pub fn find_library(name: &str) -> Result<Library, String> {
     Config::new().find(name)
 }
 
@@ -103,7 +113,7 @@ impl Config {
     ///
     /// This will use all configuration previously set to specify how
     /// `pkg-config` is run.
-    pub fn find(&self, name: &str) -> Result<(), String> {
+    pub fn find(&self, name: &str) -> Result<Library, String> {
         if env::var(&format!("{}_NO_PKG_CONFIG", envify(name))).is_some() {
             return Err(format!("pkg-config requested to be aborted for {}", name))
         } else if !target_supported() {
@@ -116,7 +126,7 @@ impl Config {
         if statik {
             cmd.arg("--static");
         }
-        cmd.arg("--libs")
+        cmd.arg("--libs").arg("--cflags")
            .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         match self.atleast_version {
             Some(ref v) => { cmd.arg(format!("{} >= {}", name, v)); }
@@ -141,6 +151,14 @@ impl Config {
             return Err(msg)
         }
 
+        let mut ret = Library {
+            libs: Vec::new(),
+            link_paths: Vec::new(),
+            include_paths: Vec::new(),
+            frameworks: Vec::new(),
+            framework_paths: Vec::new(),
+            _priv: (),
+        };
         let mut dirs = Vec::new();
         let parts = stdout.split(' ').filter(|l| l.len() > 2)
                           .map(|arg| (&arg[0..2], &arg[2..]))
@@ -149,12 +167,17 @@ impl Config {
             if flag == "-L" {
                 println!("cargo:rustc-flags=-L native={}", val);
                 dirs.push(Path::new(val));
+                ret.link_paths.push(Path::new(val));
             } else if flag == "-F" {
                 println!("cargo:rustc-flags=-L framework={}", val);
+                ret.framework_paths.push(Path::new(val));
+            } else if flag == "-I" {
+                ret.include_paths.push(Path::new(val));
             }
         }
         for &(flag, val) in parts.iter() {
             if flag == "-l" {
+                ret.libs.push(val.to_string());
                 if statik && !is_system_lib(val, &dirs[]) {
                     println!("cargo:rustc-flags=-l static={}", val);
                 } else {
@@ -167,10 +190,11 @@ impl Config {
             if part != "-framework" { continue }
             if let Some(lib) = iter.next() {
                 println!("cargo:rustc-flags=-l framework={}", lib);
+                ret.frameworks.push(lib.to_string());
             }
         }
 
-        Ok(())
+        Ok(ret)
     }
 }
 
