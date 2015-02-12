@@ -50,7 +50,7 @@
 //! }
 //! ```
 
-#![feature(env, io, path, core, unicode)]
+#![feature(env, io, path, unicode)]
 #![cfg_attr(test, deny(warnings))]
 
 use std::old_io::Command;
@@ -60,7 +60,7 @@ use std::str;
 
 pub fn target_supported() -> bool {
     env::var("HOST") == env::var("TARGET") ||
-        env::var("PKG_CONFIG_ALLOW_CROSS").is_some()
+        env::var("PKG_CONFIG_ALLOW_CROSS").is_ok()
 }
 
 #[derive(Clone)]
@@ -114,7 +114,7 @@ impl Config {
     /// This will use all configuration previously set to specify how
     /// `pkg-config` is run.
     pub fn find(&self, name: &str) -> Result<Library, String> {
-        if env::var(&format!("{}_NO_PKG_CONFIG", envify(name))).is_some() {
+        if env::var(&format!("{}_NO_PKG_CONFIG", envify(name))).is_ok() {
             return Err(format!("pkg-config requested to be aborted for {}", name))
         } else if !target_supported() {
             return Err("pkg-config doesn't handle cross compilation. Use \
@@ -200,13 +200,13 @@ impl Config {
 
 fn infer_static(name: &str) -> bool {
     let name = envify(name);
-    if env::var(&format!("{}_STATIC", name)).is_some() {
+    if env::var(&format!("{}_STATIC", name)).is_ok() {
         true
-    } else if env::var(&format!("{}_DYNAMIC", name)).is_some() {
+    } else if env::var(&format!("{}_DYNAMIC", name)).is_ok() {
         false
-    } else if env::var("PKG_CONFIG_ALL_STATIC").is_some() {
+    } else if env::var("PKG_CONFIG_ALL_STATIC").is_ok() {
         true
-    } else if env::var("PKG_CONFIG_ALL_DYNAMIC").is_some() {
+    } else if env::var("PKG_CONFIG_ALL_DYNAMIC").is_ok() {
         false
     } else {
         false

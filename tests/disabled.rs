@@ -1,4 +1,4 @@
-#![feature(env, std_misc, core, os, path, io)]
+#![feature(env, std_misc, path, io)]
 
 extern crate "pkg-config" as pkg_config;
 
@@ -12,7 +12,6 @@ static LOCK: StaticMutex = MUTEX_INIT;
 
 fn reset() {
     for (k, _) in env::vars() {
-        let k = k.to_str().unwrap();
         if k.contains("PKG_CONFIG") || k.contains("DYNAMIC") ||
            k.contains("STATIC") {
             env::remove_var(&k);
