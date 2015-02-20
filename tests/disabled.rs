@@ -1,11 +1,11 @@
-#![feature(env, std_misc, path, io)]
+#![feature(env, std_misc, old_path, old_io)]
 
 extern crate "pkg-config" as pkg_config;
 
 use std::env;
 use std::sync::mpsc::channel;
 use std::sync::{StaticMutex, MUTEX_INIT};
-use std::thread::Thread;
+use std::thread;
 use std::old_io::ChanWriter;
 
 static LOCK: StaticMutex = MUTEX_INIT;
@@ -26,7 +26,7 @@ fn find(name: &str) -> Result<pkg_config::Library, String> {
     let (tx, rx) = channel();
     let (tx2, rx2) = channel();
     let name = name.to_string();
-    let _t = Thread::scoped(move || {
+    let _t = thread::scoped(move || {
         std::old_io::stdio::set_stdout(Box::new(ChanWriter::new(tx)));
         tx2.send(pkg_config::find_library(&name)).unwrap();
     });

@@ -50,7 +50,7 @@
 //! }
 //! ```
 
-#![feature(env, io, path, unicode)]
+#![feature(env, old_io, old_path, unicode)]
 #![cfg_attr(test, deny(warnings))]
 
 use std::old_io::Command;
@@ -178,7 +178,7 @@ impl Config {
         for &(flag, val) in parts.iter() {
             if flag == "-l" {
                 ret.libs.push(val.to_string());
-                if statik && !is_system_lib(val, &dirs[]) {
+                if statik && !is_system_lib(val, &dirs) {
                     println!("cargo:rustc-flags=-l static={}", val);
                 } else {
                     println!("cargo:rustc-flags=-l {}", val);
