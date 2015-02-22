@@ -50,17 +50,18 @@
 //! }
 //! ```
 
-#![feature(env, old_io, old_path, unicode)]
+#![feature(env, path, unicode, process, fs)]
 #![cfg_attr(test, deny(warnings))]
 
-use std::old_io::Command;
-use std::old_io::fs::PathExtensions;
 use std::env;
 use std::str;
+use std::path::{PathBuf, Path};
+use std::process::Command;
+use std::fs::PathExt;
 
 pub fn target_supported() -> bool {
     env::var("HOST") == env::var("TARGET") ||
-        env::var("PKG_CONFIG_ALLOW_CROSS").is_ok()
+        env::var_os("PKG_CONFIG_ALLOW_CROSS").is_some()
 }
 
 #[derive(Clone)]
@@ -72,10 +73,10 @@ pub struct Config {
 #[derive(Debug)]
 pub struct Library {
     pub libs: Vec<String>,
-    pub link_paths: Vec<Path>,
+    pub link_paths: Vec<PathBuf>,
     pub frameworks: Vec<String>,
-    pub framework_paths: Vec<Path>,
-    pub include_paths: Vec<Path>,
+    pub framework_paths: Vec<PathBuf>,
+    pub include_paths: Vec<PathBuf>,
     _priv: (),
 }
 
@@ -114,7 +115,7 @@ impl Config {
     /// This will use all configuration previously set to specify how
     /// `pkg-config` is run.
     pub fn find(&self, name: &str) -> Result<Library, String> {
-        if env::var(&format!("{}_NO_PKG_CONFIG", envify(name))).is_ok() {
+        if env::var_os(&format!("{}_NO_PKG_CONFIG", envify(name))).is_some() {
             return Err(format!("pkg-config requested to be aborted for {}", name))
         } else if !target_supported() {
             return Err("pkg-config doesn't handle cross compilation. Use \
@@ -129,14 +130,14 @@ impl Config {
         cmd.arg("--libs").arg("--cflags")
            .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         match self.atleast_version {
-            Some(ref v) => { cmd.arg(format!("{} >= {}", name, v)); }
+            Some(ref v) => { cmd.arg(&format!("{} >= {}", name, v)); }
             None => { cmd.arg(name); }
         }
         let out = try!(cmd.output().map_err(|e| {
             format!("failed to run `{:?}`: {}", cmd, e)
         }));
-        let stdout = str::from_utf8(&out.output).unwrap();
-        let stderr = str::from_utf8(&out.error).unwrap();
+        let stdout = str::from_utf8(&out.stdout).unwrap();
+        let stderr = str::from_utf8(&out.stderr).unwrap();
         if !out.status.success() {
             let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
                                   out.status);
@@ -166,13 +167,13 @@ impl Config {
         for &(flag, val) in parts.iter() {
             if flag == "-L" {
                 println!("cargo:rustc-flags=-L native={}", val);
-                dirs.push(Path::new(val));
-                ret.link_paths.push(Path::new(val));
+                dirs.push(PathBuf::new(val));
+                ret.link_paths.push(PathBuf::new(val));
             } else if flag == "-F" {
                 println!("cargo:rustc-flags=-L framework={}", val);
-                ret.framework_paths.push(Path::new(val));
+                ret.framework_paths.push(PathBuf::new(val));
             } else if flag == "-I" {
-                ret.include_paths.push(Path::new(val));
+                ret.include_paths.push(PathBuf::new(val));
             }
         }
         for &(flag, val) in parts.iter() {
@@ -200,13 +201,13 @@ impl Config {
 
 fn infer_static(name: &str) -> bool {
     let name = envify(name);
-    if env::var(&format!("{}_STATIC", name)).is_ok() {
+    if env::var_os(&format!("{}_STATIC", name)).is_some() {
         true
-    } else if env::var(&format!("{}_DYNAMIC", name)).is_ok() {
+    } else if env::var_os(&format!("{}_DYNAMIC", name)).is_some() {
         false
-    } else if env::var("PKG_CONFIG_ALL_STATIC").is_ok() {
+    } else if env::var_os("PKG_CONFIG_ALL_STATIC").is_some() {
         true
-    } else if env::var("PKG_CONFIG_ALL_DYNAMIC").is_ok() {
+    } else if env::var_os("PKG_CONFIG_ALL_DYNAMIC").is_some() {
         false
     } else {
         false
@@ -218,10 +219,10 @@ fn envify(name: &str) -> String {
         .collect()
 }
 
-fn is_system_lib(name: &str, dirs: &[Path]) -> bool {
+fn is_system_lib(name: &str, dirs: &[PathBuf]) -> bool {
     let libname = format!("lib{}.a", name);
     let root = Path::new("/usr");
     !dirs.iter().any(|d| {
-        !root.is_ancestor_of(d) && d.join(&libname).exists()
+        !d.starts_with(root) && d.join(&libname).exists()
     })
 }
