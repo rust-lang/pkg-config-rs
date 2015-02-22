@@ -1,4 +1,4 @@
-#![feature(env, std_misc, old_path, old_io)]
+#![feature(env, std_misc, old_path, path, old_io)]
 
 extern crate "pkg-config" as pkg_config;
 
@@ -7,6 +7,7 @@ use std::sync::mpsc::channel;
 use std::sync::{StaticMutex, MUTEX_INIT};
 use std::thread;
 use std::old_io::ChanWriter;
+use std::path::PathBuf;
 
 static LOCK: StaticMutex = MUTEX_INIT;
 
@@ -72,7 +73,7 @@ fn output_ok() {
     let lib = find("foo").unwrap();
     assert!(lib.libs.contains(&"gcc".to_string()));
     assert!(lib.libs.contains(&"coregrind-amd64-linux".to_string()));
-    assert!(lib.link_paths.contains(&Path::new("/usr/lib/valgrind")));
+    assert!(lib.link_paths.contains(&PathBuf::new("/usr/lib/valgrind")));
 }
 
 #[test]
@@ -81,5 +82,5 @@ fn framework() {
     reset();
     let lib = find("framework").unwrap();
     assert!(lib.frameworks.contains(&"foo".to_string()));
-    assert!(lib.framework_paths.contains(&Path::new("/usr/lib")));
+    assert!(lib.framework_paths.contains(&PathBuf::new("/usr/lib")));
 }
