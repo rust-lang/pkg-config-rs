@@ -50,9 +50,10 @@
 //! }
 //! ```
 
-#![feature(env, path, unicode, process, fs)]
+#![feature(path, fs)]
 #![cfg_attr(test, deny(warnings))]
 
+use std::ascii::AsciiExt;
 use std::env;
 use std::str;
 use std::path::{PathBuf, Path};
@@ -215,7 +216,7 @@ fn infer_static(name: &str) -> bool {
 }
 
 fn envify(name: &str) -> String {
-    name.chars().map(|c| c.to_uppercase()).map(|c| if c == '-' {'_'} else {c})
+    name.chars().map(|c| c.to_ascii_uppercase()).map(|c| if c == '-' {'_'} else {c})
         .collect()
 }
 
