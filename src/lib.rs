@@ -50,6 +50,7 @@
 //! }
 //! ```
 
+#![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
 #![feature(path, fs)]
 #![cfg_attr(test, deny(warnings))]
 
