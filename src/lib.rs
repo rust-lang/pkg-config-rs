@@ -51,15 +51,15 @@
 //! ```
 
 #![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
-#![feature(path, fs)]
+#![feature(path)]
 #![cfg_attr(test, deny(warnings))]
 
 use std::ascii::AsciiExt;
 use std::env;
-use std::str;
+use std::fs;
 use std::path::{PathBuf, Path};
 use std::process::Command;
-use std::fs::PathExt;
+use std::str;
 
 pub fn target_supported() -> bool {
     env::var("HOST") == env::var("TARGET") ||
@@ -225,6 +225,6 @@ fn is_system_lib(name: &str, dirs: &[PathBuf]) -> bool {
     let libname = format!("lib{}.a", name);
     let root = Path::new("/usr");
     !dirs.iter().any(|d| {
-        !d.starts_with(root) && d.join(&libname).exists()
+        !d.starts_with(root) && fs::metadata(&d.join(&libname)).is_ok()
     })
 }
