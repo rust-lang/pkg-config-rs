@@ -51,7 +51,6 @@
 //! ```
 
 #![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
-#![feature(path)]
 #![cfg_attr(test, deny(warnings))]
 
 use std::ascii::AsciiExt;
