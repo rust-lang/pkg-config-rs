@@ -167,11 +167,11 @@ impl Config {
                           .collect::<Vec<_>>();
         for &(flag, val) in parts.iter() {
             if flag == "-L" {
-                println!("cargo:rustc-flags=-L native={}", val);
+                println!("cargo:rustc-link-search=native={}", val);
                 dirs.push(PathBuf::new(val));
                 ret.link_paths.push(PathBuf::new(val));
             } else if flag == "-F" {
-                println!("cargo:rustc-flags=-L framework={}", val);
+                println!("cargo:rustc-link-search=framework={}", val);
                 ret.framework_paths.push(PathBuf::new(val));
             } else if flag == "-I" {
                 ret.include_paths.push(PathBuf::new(val));
@@ -181,9 +181,9 @@ impl Config {
             if flag == "-l" {
                 ret.libs.push(val.to_string());
                 if statik && !is_system_lib(val, &dirs) {
-                    println!("cargo:rustc-flags=-l static={}", val);
+                    println!("cargo:rustc-link-lib=static={}", val);
                 } else {
-                    println!("cargo:rustc-flags=-l {}", val);
+                    println!("cargo:rustc-link-lib={}", val);
                 }
             }
         }
@@ -191,7 +191,7 @@ impl Config {
         while let Some(part) = iter.next() {
             if part != "-framework" { continue }
             if let Some(lib) = iter.next() {
-                println!("cargo:rustc-flags=-l framework={}", lib);
+                println!("cargo:rustc-link-lib=framework={}", lib);
                 ret.frameworks.push(lib.to_string());
             }
         }
