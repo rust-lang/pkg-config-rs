@@ -52,6 +52,7 @@
 
 #![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
 #![cfg_attr(test, deny(warnings))]
+#![feature(convert)]
 
 use std::ascii::AsciiExt;
 use std::env;
@@ -168,13 +169,13 @@ impl Config {
         for &(flag, val) in parts.iter() {
             if flag == "-L" {
                 println!("cargo:rustc-link-search=native={}", val);
-                dirs.push(PathBuf::new(val));
-                ret.link_paths.push(PathBuf::new(val));
+                dirs.push(PathBuf::from(val));
+                ret.link_paths.push(PathBuf::from(val));
             } else if flag == "-F" {
                 println!("cargo:rustc-link-search=framework={}", val);
-                ret.framework_paths.push(PathBuf::new(val));
+                ret.framework_paths.push(PathBuf::from(val));
             } else if flag == "-I" {
-                ret.include_paths.push(PathBuf::new(val));
+                ret.include_paths.push(PathBuf::from(val));
             }
         }
         for &(flag, val) in parts.iter() {

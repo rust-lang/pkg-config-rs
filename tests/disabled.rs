@@ -1,4 +1,4 @@
-#![feature(std_misc)]
+#![feature(std_misc, convert)]
 
 extern crate "pkg-config" as pkg_config;
 
@@ -58,7 +58,7 @@ fn output_ok() {
     let lib = find("foo").unwrap();
     assert!(lib.libs.contains(&"gcc".to_string()));
     assert!(lib.libs.contains(&"coregrind-amd64-linux".to_string()));
-    assert!(lib.link_paths.contains(&PathBuf::new("/usr/lib/valgrind")));
+    assert!(lib.link_paths.contains(&PathBuf::from("/usr/lib/valgrind")));
 }
 
 #[test]
@@ -67,5 +67,5 @@ fn framework() {
     reset();
     let lib = find("framework").unwrap();
     assert!(lib.frameworks.contains(&"foo".to_string()));
-    assert!(lib.framework_paths.contains(&PathBuf::new("/usr/lib")));
+    assert!(lib.framework_paths.contains(&PathBuf::from("/usr/lib")));
 }
