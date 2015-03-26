@@ -1,6 +1,6 @@
 #![feature(std_misc, convert)]
 
-extern crate "pkg-config" as pkg_config;
+extern crate pkg_config;
 
 use std::env;
 use std::sync::{StaticMutex, MUTEX_INIT};

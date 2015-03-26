@@ -9,7 +9,7 @@ order to use the system `pkg-config` tool (if available) to determine where a
 library is located.
 
 ```rust
-extern crate "pkg-config" as pkg_config;
+extern crate pkg_config;
 
 fn main() {
     pkg_config::find_library("foo").unwrap();
