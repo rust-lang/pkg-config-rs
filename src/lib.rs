@@ -52,7 +52,6 @@
 
 #![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
 #![cfg_attr(test, deny(warnings))]
-#![feature(convert)]
 
 use std::ascii::AsciiExt;
 use std::env;
