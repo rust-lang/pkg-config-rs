@@ -69,3 +69,11 @@ fn framework() {
     assert!(lib.frameworks.contains(&"foo".to_string()));
     assert!(lib.framework_paths.contains(&PathBuf::from("/usr/lib")));
 }
+
+#[test]
+fn get_variable() {
+    let _g = LOCK.lock();
+    reset();
+    let prefix = pkg_config::Config::get_variable("foo", "prefix").unwrap();
+    assert_eq!(prefix, "/usr");
+}
