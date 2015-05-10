@@ -122,6 +122,33 @@ impl Config {
         self
     }
 
+    /// Run a cmd and check the output for errors, returning the contents 
+    /// of stdout as a string on success.
+    fn run_cmd(cmd: &mut Command) -> Result<String, String> {
+        let out = try!(cmd.output().map_err(|e| {
+            format!("failed to run `{:?}`: {}", cmd, e)
+        }));
+
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        let stderr = str::from_utf8(&out.stderr).unwrap();
+
+        if !out.status.success() {
+            let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
+                                  out.status);
+            if stdout.len() > 0 {
+                msg.push_str("\n--- stdout\n");
+                msg.push_str(&*stdout);
+            }
+            if stderr.len() > 0 {
+                msg.push_str("\n--- stderr\n");
+                msg.push_str(stderr);
+            }
+            return Err(msg);
+        }
+
+        Ok(stdout)
+    }
+
     /// Run `pkg-config` to find the library `name`.
     ///
     /// This will use all configuration previously set to specify how
@@ -146,24 +173,11 @@ impl Config {
             None => { cmd.arg(name); }
         }
         cmd.args(&self.extra_args);
-        let out = try!(cmd.output().map_err(|e| {
-            format!("failed to run `{:?}`: {}", cmd, e)
-        }));
-        let stdout = str::from_utf8(&out.stdout).unwrap();
-        let stderr = str::from_utf8(&out.stderr).unwrap();
-        if !out.status.success() {
-            let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
-                                  out.status);
-            if stdout.len() > 0 {
-                msg.push_str("\n--- stdout\n");
-                msg.push_str(stdout);
-            }
-            if stderr.len() > 0 {
-                msg.push_str("\n--- stderr\n");
-                msg.push_str(stderr);
-            }
-            return Err(msg)
-        }
+
+        let stdout = match Config::run_cmd(&mut cmd) {
+            Ok(stdout) => stdout,
+            Err(s) => return Err(s)
+        };
 
         let mut ret = Library {
             libs: Vec::new(),
@@ -209,6 +223,21 @@ impl Config {
         }
 
         Ok(ret)
+    }
+
+    /// Run `pkg-config` to get the value of a variable from a package
+    /// using --variable.
+    pub fn get_variable(pkg_name: &str, variable_name: &str) -> 
+            Result<String, String> {
+        let mut cmd = Command::new("pkg-config");
+        cmd.arg(pkg_name);
+        cmd.arg(&format!("--variable={}", variable_name));
+        let stdout = match Config::run_cmd(&mut cmd) {
+            Ok(stdout) => stdout,
+            Err(s) => return Err(s)
+        };
+
+        Ok(stdout.trim_right().to_owned())
     }
 }
 
