@@ -122,33 +122,6 @@ impl Config {
         self
     }
 
-    /// Run a cmd and check the output for errors, returning the contents 
-    /// of stdout as a string on success.
-    fn run_cmd(cmd: &mut Command) -> Result<String, String> {
-        let out = try!(cmd.output().map_err(|e| {
-            format!("failed to run `{:?}`: {}", cmd, e)
-        }));
-
-        let stdout = String::from_utf8(out.stdout).unwrap();
-        let stderr = str::from_utf8(&out.stderr).unwrap();
-
-        if !out.status.success() {
-            let mut msg = format!("`{:?}` did not exit successfully: {}", cmd,
-                                  out.status);
-            if stdout.len() > 0 {
-                msg.push_str("\n--- stdout\n");
-                msg.push_str(&*stdout);
-            }
-            if stderr.len() > 0 {
-                msg.push_str("\n--- stderr\n");
-                msg.push_str(stderr);
-            }
-            return Err(msg);
-        }
-
-        Ok(stdout)
-    }
-
     /// Run `pkg-config` to find the library `name`.
     ///
     /// This will use all configuration previously set to specify how
@@ -161,24 +134,6 @@ impl Config {
                         PKG_CONFIG_ALLOW_CROSS=1 to override".to_string());
         }
 
-        let mut cmd = Command::new("pkg-config");
-        let statik = self.statik.unwrap_or(infer_static(name));
-        if statik {
-            cmd.arg("--static");
-        }
-        cmd.arg("--libs").arg("--cflags")
-           .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
-        match self.atleast_version {
-            Some(ref v) => { cmd.arg(&format!("{} >= {}", name, v)); }
-            None => { cmd.arg(name); }
-        }
-        cmd.args(&self.extra_args);
-
-        let stdout = match Config::run_cmd(&mut cmd) {
-            Ok(stdout) => stdout,
-            Err(s) => return Err(s)
-        };
-
         let mut ret = Library {
             libs: Vec::new(),
             link_paths: Vec::new(),
@@ -187,6 +142,9 @@ impl Config {
             framework_paths: Vec::new(),
             _priv: (),
         };
+
+        let stdout = try!(run(command(name, &["--libs", "--cflags"], self)));
+
         let mut dirs = Vec::new();
         let parts = stdout.split(' ').filter(|l| l.len() > 2)
                           .map(|arg| (&arg[0..2], &arg[2..]))
@@ -203,10 +161,11 @@ impl Config {
                 ret.include_paths.push(PathBuf::from(val));
             }
         }
+        let statik = is_static(name, self);
         for &(flag, val) in parts.iter() {
             if flag == "-l" {
                 ret.libs.push(val.to_string());
-                if statik && !is_system_lib(val, &dirs) {
+                if statik && !is_system(val, &dirs) {
                     println!("cargo:rustc-link-lib=static={}", val);
                 } else {
                     println!("cargo:rustc-link-lib={}", val);
@@ -225,19 +184,11 @@ impl Config {
         Ok(ret)
     }
 
-    /// Run `pkg-config` to get the value of a variable from a package
-    /// using --variable.
-    pub fn get_variable(pkg_name: &str, variable_name: &str) -> 
-            Result<String, String> {
-        let mut cmd = Command::new("pkg-config");
-        cmd.arg(pkg_name);
-        cmd.arg(&format!("--variable={}", variable_name));
-        let stdout = match Config::run_cmd(&mut cmd) {
-            Ok(stdout) => stdout,
-            Err(s) => return Err(s)
-        };
-
-        Ok(stdout.trim_right().to_owned())
+    /// Run `pkg-config` to get the value of a variable from a package using
+    /// --variable.
+    pub fn get_variable(package: &str, variable: &str) -> Result<String, String> {
+        let arg = format!("--variable={}", variable);
+        Ok(try!(run(command(package, &[&arg], &Config::new()))).trim_right().to_owned())
     }
 }
 
@@ -257,14 +208,60 @@ fn infer_static(name: &str) -> bool {
 }
 
 fn envify(name: &str) -> String {
-    name.chars().map(|c| c.to_ascii_uppercase()).map(|c| if c == '-' {'_'} else {c})
-        .collect()
+    name.chars().map(|c| c.to_ascii_uppercase()).map(|c| if c == '-' {'_'} else {c}).collect()
 }
 
-fn is_system_lib(name: &str, dirs: &[PathBuf]) -> bool {
+fn is_static(name: &str, config: &Config) -> bool {
+    config.statik.unwrap_or_else(|| infer_static(name))
+}
+
+fn is_system(name: &str, dirs: &[PathBuf]) -> bool {
     let libname = format!("lib{}.a", name);
     let root = Path::new("/usr");
     !dirs.iter().any(|d| {
         !d.starts_with(root) && fs::metadata(&d.join(&libname)).is_ok()
     })
+}
+
+fn command(name: &str, args: &[&str], config: &Config) -> Command {
+    let mut cmd = Command::new("pkg-config");
+    if is_static(name, config) {
+        cmd.arg("--static");
+    }
+    cmd.args(args);
+    cmd.args(&config.extra_args);
+    match config.atleast_version {
+        Some(ref version) => {
+            cmd.arg(&format!("{} >= {}", name, version));
+        },
+        None => {
+            cmd.arg(name);
+        },
+    }
+    cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
+    cmd
+}
+
+fn run(mut cmd: Command) -> Result<String, String> {
+    let out = try!(cmd.output().map_err(|e| {
+        format!("failed to run `{:?}`: {}", cmd, e)
+    }));
+
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    if out.status.success() {
+        return Ok(stdout);
+    }
+
+    let stderr = str::from_utf8(&out.stderr).unwrap();
+    let mut msg = format!("`{:?}` did not exit successfully: {}", cmd, out.status);
+    if stdout.len() > 0 {
+        msg.push_str("\n--- stdout\n");
+        msg.push_str(&*stdout);
+    }
+    if stderr.len() > 0 {
+        msg.push_str("\n--- stderr\n");
+        msg.push_str(stderr);
+    }
+
+    return Err(msg);
 }
