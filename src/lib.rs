@@ -80,6 +80,7 @@ pub struct Library {
     pub frameworks: Vec<String>,
     pub framework_paths: Vec<PathBuf>,
     pub include_paths: Vec<PathBuf>,
+    pub version: String,
     _priv: (),
 }
 
@@ -139,6 +140,9 @@ impl Config {
         let output = try!(run(command(name, &["--libs", "--cflags"], self)));
         library.digest_libs_cflags(name, &output, self);
 
+        let output = try!(run(command(name, &["--modversion"], self)));
+        library.digest_modversion(name, &output, self);
+
         Ok(library)
     }
 
@@ -158,6 +162,7 @@ impl Library {
             include_paths: Vec::new(),
             frameworks: Vec::new(),
             framework_paths: Vec::new(),
+            version: String::new(),
             _priv: (),
         }
     }
@@ -201,6 +206,10 @@ impl Library {
                 self.frameworks.push(lib.to_string());
             }
         }
+    }
+
+    fn digest_modversion(&mut self, _: &str, output: &str, _: &Config) {
+        self.version.push_str(output.trim());
     }
 }
 

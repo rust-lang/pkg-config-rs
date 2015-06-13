@@ -77,3 +77,10 @@ fn get_variable() {
     let prefix = pkg_config::Config::get_variable("foo", "prefix").unwrap();
     assert_eq!(prefix, "/usr");
 }
+
+#[test]
+fn version() {
+    let _g = LOCK.lock();
+    reset();
+    assert_eq!(&find("foo").unwrap().version[..], "3.10.0.SVN");
+}
