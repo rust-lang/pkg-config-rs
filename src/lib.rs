@@ -134,54 +134,12 @@ impl Config {
                         PKG_CONFIG_ALLOW_CROSS=1 to override".to_string());
         }
 
-        let mut ret = Library {
-            libs: Vec::new(),
-            link_paths: Vec::new(),
-            include_paths: Vec::new(),
-            frameworks: Vec::new(),
-            framework_paths: Vec::new(),
-            _priv: (),
-        };
+        let mut library = Library::new();
 
-        let stdout = try!(run(command(name, &["--libs", "--cflags"], self)));
+        let output = try!(run(command(name, &["--libs", "--cflags"], self)));
+        library.digest_libs_cflags(name, &output, self);
 
-        let mut dirs = Vec::new();
-        let parts = stdout.split(' ').filter(|l| l.len() > 2)
-                          .map(|arg| (&arg[0..2], &arg[2..]))
-                          .collect::<Vec<_>>();
-        for &(flag, val) in parts.iter() {
-            if flag == "-L" {
-                println!("cargo:rustc-link-search=native={}", val);
-                dirs.push(PathBuf::from(val));
-                ret.link_paths.push(PathBuf::from(val));
-            } else if flag == "-F" {
-                println!("cargo:rustc-link-search=framework={}", val);
-                ret.framework_paths.push(PathBuf::from(val));
-            } else if flag == "-I" {
-                ret.include_paths.push(PathBuf::from(val));
-            }
-        }
-        let statik = is_static(name, self);
-        for &(flag, val) in parts.iter() {
-            if flag == "-l" {
-                ret.libs.push(val.to_string());
-                if statik && !is_system(val, &dirs) {
-                    println!("cargo:rustc-link-lib=static={}", val);
-                } else {
-                    println!("cargo:rustc-link-lib={}", val);
-                }
-            }
-        }
-        let mut iter = stdout.split(' ');
-        while let Some(part) = iter.next() {
-            if part != "-framework" { continue }
-            if let Some(lib) = iter.next() {
-                println!("cargo:rustc-link-lib=framework={}", lib);
-                ret.frameworks.push(lib.to_string());
-            }
-        }
-
-        Ok(ret)
+        Ok(library)
     }
 
     /// Run `pkg-config` to get the value of a variable from a package using
@@ -189,6 +147,60 @@ impl Config {
     pub fn get_variable(package: &str, variable: &str) -> Result<String, String> {
         let arg = format!("--variable={}", variable);
         Ok(try!(run(command(package, &[&arg], &Config::new()))).trim_right().to_owned())
+    }
+}
+
+impl Library {
+    fn new() -> Library {
+        Library {
+            libs: Vec::new(),
+            link_paths: Vec::new(),
+            include_paths: Vec::new(),
+            frameworks: Vec::new(),
+            framework_paths: Vec::new(),
+            _priv: (),
+        }
+    }
+
+    fn digest_libs_cflags(&mut self, name: &str, output: &str, config: &Config) {
+        let parts = output.split(' ').filter(|l| l.len() > 2)
+                          .map(|arg| (&arg[0..2], &arg[2..]))
+                          .collect::<Vec<_>>();
+
+        let mut dirs = Vec::new();
+        for &(flag, val) in parts.iter() {
+            if flag == "-L" {
+                println!("cargo:rustc-link-search=native={}", val);
+                dirs.push(PathBuf::from(val));
+                self.link_paths.push(PathBuf::from(val));
+            } else if flag == "-F" {
+                println!("cargo:rustc-link-search=framework={}", val);
+                self.framework_paths.push(PathBuf::from(val));
+            } else if flag == "-I" {
+                self.include_paths.push(PathBuf::from(val));
+            }
+        }
+
+        let statik = is_static(name, config);
+        for &(flag, val) in parts.iter() {
+            if flag == "-l" {
+                self.libs.push(val.to_string());
+                if statik && !is_system(val, &dirs) {
+                    println!("cargo:rustc-link-lib=static={}", val);
+                } else {
+                    println!("cargo:rustc-link-lib={}", val);
+                }
+            }
+        }
+
+        let mut iter = output.split(' ');
+        while let Some(part) = iter.next() {
+            if part != "-framework" { continue }
+            if let Some(lib) = iter.next() {
+                println!("cargo:rustc-link-lib=framework={}", lib);
+                self.frameworks.push(lib.to_string());
+            }
+        }
     }
 }
 
