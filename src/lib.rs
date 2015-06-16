@@ -137,11 +137,11 @@ impl Config {
 
         let mut library = Library::new();
 
-        let output = try!(run(command(name, &["--libs", "--cflags"], self)));
-        library.digest_libs_cflags(name, &output, self);
+        let output = try!(run(self.command(name, &["--libs", "--cflags"])));
+        library.parse_libs_cflags(name, &output, self);
 
-        let output = try!(run(command(name, &["--modversion"], self)));
-        library.digest_modversion(name, &output, self);
+        let output = try!(run(self.command(name, &["--modversion"])));
+        library.parse_modversion(&output);
 
         Ok(library)
     }
@@ -150,7 +150,28 @@ impl Config {
     /// --variable.
     pub fn get_variable(package: &str, variable: &str) -> Result<String, String> {
         let arg = format!("--variable={}", variable);
-        Ok(try!(run(command(package, &[&arg], &Config::new()))).trim_right().to_owned())
+        let cfg = Config::new();
+        Ok(try!(run(cfg.command(package, &[&arg]))).trim_right().to_owned())
+    }
+
+    fn is_static(&self, name: &str) -> bool {
+        self.statik.unwrap_or_else(|| infer_static(name))
+    }
+
+    fn command(&self, name: &str, args: &[&str]) -> Command {
+        let mut cmd = Command::new("pkg-config");
+        if self.is_static(name) {
+            cmd.arg("--static");
+        }
+        cmd.args(args)
+           .args(&self.extra_args)
+           .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
+        if let Some(ref version) = self.atleast_version {
+            cmd.arg(&format!("{} >= {}", name, version));
+        } else {
+            cmd.arg(name);
+        }
+        cmd
     }
 }
 
@@ -167,34 +188,37 @@ impl Library {
         }
     }
 
-    fn digest_libs_cflags(&mut self, name: &str, output: &str, config: &Config) {
-        let parts = output.split(' ').filter(|l| l.len() > 2)
+    fn parse_libs_cflags(&mut self, name: &str, output: &str, config: &Config) {
+        let parts = output.split(' ')
+                          .filter(|l| l.len() > 2)
                           .map(|arg| (&arg[0..2], &arg[2..]))
                           .collect::<Vec<_>>();
 
         let mut dirs = Vec::new();
+        let statik = config.is_static(name);
         for &(flag, val) in parts.iter() {
-            if flag == "-L" {
-                println!("cargo:rustc-link-search=native={}", val);
-                dirs.push(PathBuf::from(val));
-                self.link_paths.push(PathBuf::from(val));
-            } else if flag == "-F" {
-                println!("cargo:rustc-link-search=framework={}", val);
-                self.framework_paths.push(PathBuf::from(val));
-            } else if flag == "-I" {
-                self.include_paths.push(PathBuf::from(val));
-            }
-        }
-
-        let statik = is_static(name, config);
-        for &(flag, val) in parts.iter() {
-            if flag == "-l" {
-                self.libs.push(val.to_string());
-                if statik && !is_system(val, &dirs) {
-                    println!("cargo:rustc-link-lib=static={}", val);
-                } else {
-                    println!("cargo:rustc-link-lib={}", val);
+            match flag {
+                "-L" => {
+                    println!("cargo:rustc-link-search=native={}", val);
+                    dirs.push(PathBuf::from(val));
+                    self.link_paths.push(PathBuf::from(val));
                 }
+                "-F" => {
+                    println!("cargo:rustc-link-search=framework={}", val);
+                    self.framework_paths.push(PathBuf::from(val));
+                }
+                "-I" => {
+                    self.include_paths.push(PathBuf::from(val));
+                }
+                "-l" => {
+                    self.libs.push(val.to_string());
+                    if statik && !is_system(val, &dirs) {
+                        println!("cargo:rustc-link-lib=static={}", val);
+                    } else {
+                        println!("cargo:rustc-link-lib={}", val);
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -208,7 +232,7 @@ impl Library {
         }
     }
 
-    fn digest_modversion(&mut self, _: &str, output: &str, _: &Config) {
+    fn parse_modversion(&mut self, output: &str) {
         self.version.push_str(output.trim());
     }
 }
@@ -229,11 +253,9 @@ fn infer_static(name: &str) -> bool {
 }
 
 fn envify(name: &str) -> String {
-    name.chars().map(|c| c.to_ascii_uppercase()).map(|c| if c == '-' {'_'} else {c}).collect()
-}
-
-fn is_static(name: &str, config: &Config) -> bool {
-    config.statik.unwrap_or_else(|| infer_static(name))
+    name.chars().map(|c| c.to_ascii_uppercase()).map(|c| {
+        if c == '-' {'_'} else {c}
+    }).collect()
 }
 
 fn is_system(name: &str, dirs: &[PathBuf]) -> bool {
@@ -242,25 +264,6 @@ fn is_system(name: &str, dirs: &[PathBuf]) -> bool {
     !dirs.iter().any(|d| {
         !d.starts_with(root) && fs::metadata(&d.join(&libname)).is_ok()
     })
-}
-
-fn command(name: &str, args: &[&str], config: &Config) -> Command {
-    let mut cmd = Command::new("pkg-config");
-    if is_static(name, config) {
-        cmd.arg("--static");
-    }
-    cmd.args(args);
-    cmd.args(&config.extra_args);
-    match config.atleast_version {
-        Some(ref version) => {
-            cmd.arg(&format!("{} >= {}", name, version));
-        },
-        None => {
-            cmd.arg(name);
-        },
-    }
-    cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
-    cmd
 }
 
 fn run(mut cmd: Command) -> Result<String, String> {
@@ -277,7 +280,7 @@ fn run(mut cmd: Command) -> Result<String, String> {
     let mut msg = format!("`{:?}` did not exit successfully: {}", cmd, out.status);
     if stdout.len() > 0 {
         msg.push_str("\n--- stdout\n");
-        msg.push_str(&*stdout);
+        msg.push_str(&stdout);
     }
     if stderr.len() > 0 {
         msg.push_str("\n--- stderr\n");
