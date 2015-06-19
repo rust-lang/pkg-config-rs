@@ -1,4 +1,4 @@
-#![feature(std_misc)]
+#![feature(static_mutex)]
 
 extern crate pkg_config;
 
