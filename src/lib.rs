@@ -62,8 +62,15 @@ use std::process::Command;
 use std::str;
 
 pub fn target_supported() -> bool {
-    env::var("HOST") == env::var("TARGET") ||
-        env::var_os("PKG_CONFIG_ALLOW_CROSS").is_some()
+    let target = env::var("TARGET").unwrap_or(String::new());
+    let host = env::var("HOST").unwrap_or(String::new());
+
+    // Only use pkg-config in host == target situations by default (allowing an
+    // override) and then also don't use pkg-config on MSVC as it's really not
+    // meant to work there but when building MSVC code in a MSYS shell we may be
+    // able to run pkg-config anyway.
+    (host == target || env::var_os("PKG_CONFIG_ALLOW_CROSS").is_some()) &&
+    !target.contains("msvc")
 }
 
 #[derive(Clone)]
