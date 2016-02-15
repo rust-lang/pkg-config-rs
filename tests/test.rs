@@ -2,6 +2,7 @@
 
 extern crate pkg_config;
 
+use pkg_config::Error;
 use std::env;
 use std::sync::{StaticMutex, MUTEX_INIT};
 use std::path::PathBuf;
@@ -20,8 +21,8 @@ fn reset() {
     env::set_var("PKG_CONFIG_PATH", &env::current_dir().unwrap().join("tests"));
 }
 
-fn find(name: &str) -> Result<pkg_config::Library, String> {
-    pkg_config::find_library(name)
+fn find(name: &str) -> Result<pkg_config::Library, Error> {
+    pkg_config::probe_library(name)
 }
 
 #[test]
@@ -30,7 +31,10 @@ fn cross_disabled() {
     reset();
     env::set_var("TARGET", "foo");
     env::set_var("HOST", "bar");
-    find("foo").unwrap_err();
+    match find("foo") {
+        Err(Error::CrossCompilation) => {},
+        x => panic!("Error::CrossCompilation expected, found `{:?}`", x),
+    }
 }
 
 #[test]
@@ -48,7 +52,12 @@ fn package_disabled() {
     let _g = LOCK.lock();
     reset();
     env::set_var("FOO_NO_PKG_CONFIG", "1");
-    find("foo").unwrap_err();
+    match find("foo") {
+        Err(Error::EnvNoPkgConfig(name)) => {
+            assert_eq!(name, "FOO_NO_PKG_CONFIG")
+        }
+        x => panic!("Error::EnvNoPkgConfig expected, found `{:?}`", x),
+    }
 }
 
 #[test]
@@ -74,7 +83,7 @@ fn framework() {
 fn get_variable() {
     let _g = LOCK.lock();
     reset();
-    let prefix = pkg_config::Config::get_variable("foo", "prefix").unwrap();
+    let prefix = pkg_config::get_variable("foo", "prefix").unwrap();
     assert_eq!(prefix, "/usr");
 }
 
