@@ -36,7 +36,7 @@
 //! extern crate pkg_config;
 //!
 //! fn main() {
-//!     pkg_config::find_library("foo").unwrap();
+//!     pkg_config::probe_library("foo").unwrap();
 //! }
 //! ```
 //!
@@ -46,7 +46,7 @@
 //! extern crate pkg_config;
 //!
 //! fn main() {
-//!     pkg_config::Config::new().statik(true).find("foo").unwrap();
+//!     pkg_config::Config::new().statik(true).probe("foo").unwrap();
 //! }
 //! ```
 
@@ -100,18 +100,22 @@ pub enum Error {
     ///
     /// Contains the name of the responsible environment variable.
     EnvNoPkgConfig(String),
+
     /// Cross compilation detected.
     ///
     /// Override with `PKG_CONFIG_ALLOW_CROSS=1`.
     CrossCompilation,
+
     /// Failed to run `pkg-config`.
     ///
     /// Contains the command and the cause.
     Command { command: String, cause: io::Error },
+
     /// `pkg-config` did not exit sucessfully.
     ///
     /// Contains the command and output.
     Failure { command: String, output: Output },
+
     #[doc(hidden)]
     // please don't match on this, we're likely to add more variants over time
     __Nonexhaustive,
@@ -119,16 +123,15 @@ pub enum Error {
 
 impl error::Error for Error {
     fn description(&self) -> &str {
-        use self::Error::*;
         match *self {
-            EnvNoPkgConfig(_) => "pkg-config requested to be aborted",
-            CrossCompilation => {
+            Error::EnvNoPkgConfig(_) => "pkg-config requested to be aborted",
+            Error::CrossCompilation => {
                 "pkg-config doesn't handle cross compilation. \
                  Use PKG_CONFIG_ALLOW_CROSS=1 to override"
             }
-            Command { .. } => "failed to run pkg-config",
-            Failure { .. } => "pkg-config did not exit sucessfully",
-            __Nonexhaustive => unreachable!(),
+            Error::Command { .. } => "failed to run pkg-config",
+            Error::Failure { .. } => "pkg-config did not exit sucessfully",
+            Error::__Nonexhaustive => panic!(),
         }
     }
 
@@ -159,56 +162,54 @@ impl<'a> fmt::Debug for OutputDebugger<'a> {
         };
 
         fmt.debug_struct("Output")
-            .field("status", &self.0.status)
-            .field("stdout", stdout_debug)
-            .field("stderr", stderr_debug)
-            .finish()
+           .field("status", &self.0.status)
+           .field("stdout", stdout_debug)
+           .field("stderr", stderr_debug)
+           .finish()
     }
 }
 
 // Workaround for temporary lack of impl Debug for Output in stable std, continued
 impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        use self::Error::*;
         match *self {
-            EnvNoPkgConfig(ref name) => {
+            Error::EnvNoPkgConfig(ref name) => {
                 f.debug_tuple("EnvNoPkgConfig")
-                    .field(name)
-                    .finish()
+                 .field(name)
+                 .finish()
             }
-            CrossCompilation => write!(f, "CrossCompilation"),
-            Command { ref command, ref cause } => {
+            Error::CrossCompilation => write!(f, "CrossCompilation"),
+            Error::Command { ref command, ref cause } => {
                 f.debug_struct("Command")
-                    .field("command", command)
-                    .field("cause", cause)
-                    .finish()
+                 .field("command", command)
+                 .field("cause", cause)
+                 .finish()
             }
-            Failure { ref command, ref output } => {
+            Error::Failure { ref command, ref output } => {
                 f.debug_struct("Failure")
-                    .field("command", command)
-                    .field("output", &OutputDebugger(output))
-                    .finish()
+                 .field("command", command)
+                 .field("output", &OutputDebugger(output))
+                 .finish()
             }
-            __Nonexhaustive => write!(f, "__Nonexhaustive"),
+            Error::__Nonexhaustive => panic!(),
         }
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        use self::Error::*;
         match *self {
-            EnvNoPkgConfig(ref name) => {
+            Error::EnvNoPkgConfig(ref name) => {
                 write!(f, "Aborted because {} is set", name)
             }
-            CrossCompilation => {
+            Error::CrossCompilation => {
                 write!(f, "Cross compilation detected. \
                        Use PKG_CONFIG_ALLOW_CROSS=1 to override")
             }
-            Command { ref command, ref cause } => {
+            Error::Command { ref command, ref cause } => {
                 write!(f, "Failed to run `{}`: {}", command, cause)
             }
-            Failure { ref command, ref output } => {
+            Error::Failure { ref command, ref output } => {
                 let stdout = str::from_utf8(&output.stdout).unwrap();
                 let stderr = str::from_utf8(&output.stderr).unwrap();
                 try!(write!(f, "`{}` did not exit successfully: {}", command, output.status));
@@ -220,13 +221,13 @@ impl fmt::Display for Error {
                 }
                 Ok(())
             }
-            __Nonexhaustive => unreachable!(),
+            Error::__Nonexhaustive => panic!(),
         }
     }
 }
 
+/// Deprecated in favor of the probe_library function
 #[doc(hidden)]
-//#[deprecated(since = "0.3.7", note = "use `probe_library` instead")]
 pub fn find_library(name: &str) -> Result<Library, String> {
     probe_library(name).map_err(|e| e.to_string())
 }
@@ -278,8 +279,8 @@ impl Config {
         self
     }
 
+    /// Deprecated in favor fo the `probe` function
     #[doc(hidden)]
-    //#[deprecated(since = "0.3.7", note = "use `probe` instead")]
     pub fn find(&self, name: &str) -> Result<Library, String> {
         self.probe(name).map_err(|e| e.to_string())
     }
@@ -307,8 +308,8 @@ impl Config {
         Ok(library)
     }
 
+    /// Deprecated in favor of the top level `get_variable` function
     #[doc(hidden)]
-    //#[deprecated(since = "0.3.7", note = "use the `get_variable` free function instead")]
     pub fn get_variable(package: &str, variable: &str) -> Result<String, String> {
         get_variable(package, variable).map_err(|e| e.to_string())
     }
