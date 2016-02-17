@@ -55,10 +55,13 @@
 
 use std::ascii::AsciiExt;
 use std::env;
+use std::error;
 use std::ffi::{OsStr, OsString};
+use std::fmt;
 use std::fs;
+use std::io;
 use std::path::{PathBuf, Path};
-use std::process::Command;
+use std::process::{Command, Output};
 use std::str;
 
 pub fn target_supported() -> bool {
@@ -91,9 +94,154 @@ pub struct Library {
     _priv: (),
 }
 
-/// Simple shortcut for using all default options for finding a library.
+/// Represents all reasons `pkg-config` might not succeed or be run at all.
+pub enum Error {
+    /// Aborted because of `*_NO_PKG_CONFIG` environment variable.
+    ///
+    /// Contains the name of the responsible environment variable.
+    EnvNoPkgConfig(String),
+    /// Cross compilation detected.
+    ///
+    /// Override with `PKG_CONFIG_ALLOW_CROSS=1`.
+    CrossCompilation,
+    /// Failed to run `pkg-config`.
+    ///
+    /// Contains the command and the cause.
+    Command { command: String, cause: io::Error },
+    /// `pkg-config` did not exit sucessfully.
+    ///
+    /// Contains the command and output.
+    Failure { command: String, output: Output },
+    #[doc(hidden)]
+    // please don't match on this, we're likely to add more variants over time
+    __Nonexhaustive,
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        use self::Error::*;
+        match *self {
+            EnvNoPkgConfig(_) => "pkg-config requested to be aborted",
+            CrossCompilation => {
+                "pkg-config doesn't handle cross compilation. \
+                 Use PKG_CONFIG_ALLOW_CROSS=1 to override"
+            }
+            Command { .. } => "failed to run pkg-config",
+            Failure { .. } => "pkg-config did not exit sucessfully",
+            __Nonexhaustive => unreachable!(),
+        }
+    }
+
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::Command { ref cause, .. } => Some(cause),
+            _ => None,
+        }
+    }
+}
+
+// Workaround for temporary lack of impl Debug for Output in stable std
+struct OutputDebugger<'a>(&'a Output);
+
+// Lifted from 1.7 std
+impl<'a> fmt::Debug for OutputDebugger<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let stdout_utf8 = str::from_utf8(&self.0.stdout);
+        let stdout_debug: &fmt::Debug = match stdout_utf8 {
+            Ok(ref str) => str,
+            Err(_) => &self.0.stdout
+        };
+
+        let stderr_utf8 = str::from_utf8(&self.0.stderr);
+        let stderr_debug: &fmt::Debug = match stderr_utf8 {
+            Ok(ref str) => str,
+            Err(_) => &self.0.stderr
+        };
+
+        fmt.debug_struct("Output")
+            .field("status", &self.0.status)
+            .field("stdout", stdout_debug)
+            .field("stderr", stderr_debug)
+            .finish()
+    }
+}
+
+// Workaround for temporary lack of impl Debug for Output in stable std, continued
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use self::Error::*;
+        match *self {
+            EnvNoPkgConfig(ref name) => {
+                f.debug_tuple("EnvNoPkgConfig")
+                    .field(name)
+                    .finish()
+            }
+            CrossCompilation => write!(f, "CrossCompilation"),
+            Command { ref command, ref cause } => {
+                f.debug_struct("Command")
+                    .field("command", command)
+                    .field("cause", cause)
+                    .finish()
+            }
+            Failure { ref command, ref output } => {
+                f.debug_struct("Failure")
+                    .field("command", command)
+                    .field("output", &OutputDebugger(output))
+                    .finish()
+            }
+            __Nonexhaustive => write!(f, "__Nonexhaustive"),
+        }
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use self::Error::*;
+        match *self {
+            EnvNoPkgConfig(ref name) => {
+                write!(f, "Aborted because {} is set", name)
+            }
+            CrossCompilation => {
+                write!(f, "Cross compilation detected. \
+                       Use PKG_CONFIG_ALLOW_CROSS=1 to override")
+            }
+            Command { ref command, ref cause } => {
+                write!(f, "Failed to run `{}`: {}", command, cause)
+            }
+            Failure { ref command, ref output } => {
+                let stdout = str::from_utf8(&output.stdout).unwrap();
+                let stderr = str::from_utf8(&output.stderr).unwrap();
+                try!(write!(f, "`{}` did not exit successfully: {}", command, output.status));
+                if !stdout.is_empty() {
+                    try!(write!(f, "\n--- stdout\n{}", stdout));
+                }
+                if !stderr.is_empty() {
+                    try!(write!(f, "\n--- stdout\n{}", stderr));
+                }
+                Ok(())
+            }
+            __Nonexhaustive => unreachable!(),
+        }
+    }
+}
+
+#[doc(hidden)]
+//#[deprecated(since = "0.3.7", note = "use `probe_library` instead")]
 pub fn find_library(name: &str) -> Result<Library, String> {
-    Config::new().find(name)
+    probe_library(name).map_err(|e| e.to_string())
+}
+
+/// Simple shortcut for using all default options for finding a library.
+pub fn probe_library(name: &str) -> Result<Library, Error> {
+    Config::new().probe(name)
+}
+
+/// Run `pkg-config` to get the value of a variable from a package using
+/// --variable.
+pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
+    let arg = format!("--variable={}", variable);
+    let cfg = Config::new();
+    Ok(try!(run(cfg.command(package, &[&arg]))).trim_right().to_owned())
 }
 
 impl Config {
@@ -130,16 +278,22 @@ impl Config {
         self
     }
 
+    #[doc(hidden)]
+    //#[deprecated(since = "0.3.7", note = "use `probe` instead")]
+    pub fn find(&self, name: &str) -> Result<Library, String> {
+        self.probe(name).map_err(|e| e.to_string())
+    }
+
     /// Run `pkg-config` to find the library `name`.
     ///
     /// This will use all configuration previously set to specify how
     /// `pkg-config` is run.
-    pub fn find(&self, name: &str) -> Result<Library, String> {
-        if env::var_os(&format!("{}_NO_PKG_CONFIG", envify(name))).is_some() {
-            return Err(format!("pkg-config requested to be aborted for {}", name))
+    pub fn probe(&self, name: &str) -> Result<Library, Error> {
+        let abort_var_name = format!("{}_NO_PKG_CONFIG", envify(name));
+        if env::var_os(&abort_var_name).is_some() {
+            return Err(Error::EnvNoPkgConfig(abort_var_name))
         } else if !target_supported() {
-            return Err("pkg-config doesn't handle cross compilation. Use \
-                        PKG_CONFIG_ALLOW_CROSS=1 to override".to_string());
+            return Err(Error::CrossCompilation);
         }
 
         let mut library = Library::new();
@@ -153,12 +307,10 @@ impl Config {
         Ok(library)
     }
 
-    /// Run `pkg-config` to get the value of a variable from a package using
-    /// --variable.
+    #[doc(hidden)]
+    //#[deprecated(since = "0.3.7", note = "use the `get_variable` free function instead")]
     pub fn get_variable(package: &str, variable: &str) -> Result<String, String> {
-        let arg = format!("--variable={}", variable);
-        let cfg = Config::new();
-        Ok(try!(run(cfg.command(package, &[&arg]))).trim_right().to_owned())
+        get_variable(package, variable).map_err(|e| e.to_string())
     }
 
     fn is_static(&self, name: &str) -> bool {
@@ -273,26 +425,22 @@ fn is_system(name: &str, dirs: &[PathBuf]) -> bool {
     })
 }
 
-fn run(mut cmd: Command) -> Result<String, String> {
-    let out = try!(cmd.output().map_err(|e| {
-        format!("failed to run `{:?}`: {}", cmd, e)
-    }));
-
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    if out.status.success() {
-        return Ok(stdout);
+fn run(mut cmd: Command) -> Result<String, Error> {
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8(output.stdout).unwrap();
+                Ok(stdout)
+            } else {
+                Err(Error::Failure {
+                    command: format!("{:?}", cmd),
+                    output: output,
+                })
+            }
+        }
+        Err(cause) => Err(Error::Command {
+            command: format!("{:?}", cmd),
+            cause: cause,
+        }),
     }
-
-    let stderr = str::from_utf8(&out.stderr).unwrap();
-    let mut msg = format!("`{:?}` did not exit successfully: {}", cmd, out.status);
-    if stdout.len() > 0 {
-        msg.push_str("\n--- stdout\n");
-        msg.push_str(&stdout);
-    }
-    if stderr.len() > 0 {
-        msg.push_str("\n--- stderr\n");
-        msg.push_str(stderr);
-    }
-
-    return Err(msg);
 }
