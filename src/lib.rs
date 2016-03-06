@@ -328,7 +328,8 @@ impl Config {
     }
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
-        let mut cmd = Command::new("pkg-config");
+        let exe = env::var("PKG_CONFIG").unwrap_or(String::from("pkg-config"));
+        let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
         }
