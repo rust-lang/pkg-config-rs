@@ -11,8 +11,10 @@ static LOCK: StaticMutex = MUTEX_INIT;
 
 fn reset() {
     for (k, _) in env::vars() {
-        if k.contains("PKG_CONFIG") || k.contains("DYNAMIC") ||
-           k.contains("STATIC") {
+        if k.contains("DYNAMIC") ||
+           k.contains("STATIC") ||
+           k.contains("PKG_CONFIG_ALLOW_CROSS") ||
+           k.contains("FOO_NO_PKG_CONFIG") {
             env::remove_var(&k);
         }
     }
