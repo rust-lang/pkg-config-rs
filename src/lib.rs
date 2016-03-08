@@ -408,7 +408,7 @@ impl Library {
                 continue
             }
             if let Some(lib) = iter.next() {
-                let meta = format!("cargo:rustc-link-lib=framework={}", lib);
+                let meta = format!("rustc-link-lib=framework={}", lib);
                 config.print_metadata(&meta);
                 self.frameworks.push(lib.to_string());
             }
