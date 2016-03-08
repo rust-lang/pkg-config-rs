@@ -365,7 +365,8 @@ impl Library {
     }
 
     fn parse_libs_cflags(&mut self, name: &str, output: &str, config: &Config) {
-        let parts = output.split(' ')
+        let parts = output.trim_right()
+                          .split(' ')
                           .filter(|l| l.len() > 2)
                           .map(|arg| (&arg[0..2], &arg[2..]))
                           .collect::<Vec<_>>();
@@ -402,7 +403,7 @@ impl Library {
             }
         }
 
-        let mut iter = output.split(' ');
+        let mut iter = output.trim_right().split(' ');
         while let Some(part) = iter.next() {
             if part != "-framework" {
                 continue
