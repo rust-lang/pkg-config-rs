@@ -218,7 +218,7 @@ impl fmt::Display for Error {
                     try!(write!(f, "\n--- stdout\n{}", stdout));
                 }
                 if !stderr.is_empty() {
-                    try!(write!(f, "\n--- stdout\n{}", stderr));
+                    try!(write!(f, "\n--- stderr\n{}", stderr));
                 }
                 Ok(())
             }
