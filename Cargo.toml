@@ -11,3 +11,6 @@ A library to run the pkg-config system tool at build time in order to be used in
 Cargo build scripts.
 """
 keywords = ["build-dependencies"]
+
+[dev-dependencies]
+lazy_static = "0.2"
