@@ -12,7 +12,7 @@ library is located.
 extern crate pkg_config;
 
 fn main() {
-    pkg_config::find_library("foo").unwrap();
+    pkg_config::probe_library("foo").unwrap();
 }
 ```
 
