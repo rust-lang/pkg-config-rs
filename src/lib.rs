@@ -334,8 +334,7 @@ impl Config {
             cmd.arg("--static");
         }
         cmd.args(args)
-           .args(&self.extra_args)
-           .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
+           .args(&self.extra_args);
         if let Some(ref version) = self.atleast_version {
             cmd.arg(&format!("{} >= {}", name, version));
         } else {
