@@ -107,6 +107,9 @@ pub enum Error {
     /// Override with `PKG_CONFIG_ALLOW_CROSS=1`.
     CrossCompilation,
 
+    /// Attempted to compile using the MSVC ABI build
+    MSVC,
+
     /// Failed to run `pkg-config`.
     ///
     /// Contains the command and the cause.
@@ -130,6 +133,7 @@ impl error::Error for Error {
                 "pkg-config doesn't handle cross compilation. \
                  Use PKG_CONFIG_ALLOW_CROSS=1 to override"
             }
+            Error::MSVC => "pkg-config is incompatible with the MSVC ABI build.",
             Error::Command { .. } => "failed to run pkg-config",
             Error::Failure { .. } => "pkg-config did not exit sucessfully",
             Error::__Nonexhaustive => panic!(),
@@ -180,6 +184,7 @@ impl fmt::Debug for Error {
                  .finish()
             }
             Error::CrossCompilation => write!(f, "CrossCompilation"),
+            Error::MSVC => write!(f, "MSVC"),
             Error::Command { ref command, ref cause } => {
                 f.debug_struct("Command")
                  .field("command", command)
@@ -206,6 +211,10 @@ impl fmt::Display for Error {
             Error::CrossCompilation => {
                 write!(f, "Cross compilation detected. \
                        Use PKG_CONFIG_ALLOW_CROSS=1 to override")
+            }
+            Error::MSVC => {
+                write!(f, "MSVC target detected. If you are using the MSVC ABI \
+                       rust build, please use the GNU ABI build instead.")
             }
             Error::Command { ref command, ref cause } => {
                 write!(f, "Failed to run `{}`: {}", command, cause)
@@ -303,7 +312,12 @@ impl Config {
         if env::var_os(&abort_var_name).is_some() {
             return Err(Error::EnvNoPkgConfig(abort_var_name))
         } else if !target_supported() {
-            return Err(Error::CrossCompilation);
+            if env::var("TARGET").unwrap_or(String::new()).contains("msvc") {
+                return Err(Error::MSVC);
+            }
+            else {
+                return Err(Error::CrossCompilation);
+            }
         }
 
         let mut library = Library::new();
