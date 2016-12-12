@@ -8,11 +8,21 @@ A simple library meant to be used as a build dependency with Cargo packages in
 order to use the system `pkg-config` tool (if available) to determine where a
 library is located.
 
+To use pkg-config to link to a library `foo`, with minimum version `1.2.3`, add
+the following to your `Cargo.toml`:
+
+```toml
+[package.metadata.pkg-config]
+foo = "1.2.3"
+```
+
+Then add the following to `build.rs`:
+
 ```rust
 extern crate pkg_config;
 
 fn main() {
-    pkg_config::probe_library("foo").unwrap();
+    pkg_config::probe_all().unwrap();
 }
 ```
 
