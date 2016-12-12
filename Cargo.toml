@@ -12,5 +12,8 @@ Cargo build scripts.
 """
 keywords = ["build-dependencies"]
 
+[dependencies]
+toml = "0.2"
+
 [dev-dependencies]
 lazy_static = "0.2"

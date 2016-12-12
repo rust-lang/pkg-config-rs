@@ -30,7 +30,35 @@
 //!
 //! # Example
 //!
-//! Find the system library named `foo`.
+//! Find system libraries using `Cargo.toml` metadata:
+//!
+//! ```no_run
+//! extern crate pkg_config;
+//!
+//! fn main() {
+//!     pkg_config::probe_all().unwrap();
+//! }
+//! ```
+//!
+//! This requires a stanza like the following in `Cargo.toml`:
+//!
+//! ```toml
+//! [package.metadata.pkg-config]
+//! foo = "1.2.3"
+//! bar = "4.5.6"
+//! ```
+//!
+//! Find the system library named `foo` manually, with minimum version 1.2.3:
+//!
+//! ```no_run
+//! extern crate pkg_config;
+//!
+//! fn main() {
+//!     pkg_config::Config::new().atleast_version("1.2.3").probe("foo").unwrap();
+//! }
+//! ```
+//! Find the system library named `foo` manually, with no version requirement
+//! (not recommended).
 //!
 //! ```no_run
 //! extern crate pkg_config;
@@ -53,13 +81,16 @@
 #![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
 #![cfg_attr(test, deny(warnings))]
 
+extern crate toml;
+
 use std::ascii::AsciiExt;
+use std::collections::HashMap;
 use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{PathBuf, Path};
 use std::process::{Command, Output};
 use std::str;
@@ -120,6 +151,11 @@ pub enum Error {
     /// Contains the command and output.
     Failure { command: String, output: Output },
 
+    /// Failed to parse metadata from Cargo.toml.
+    ///
+    /// Contains an error description.
+    MetadataParse(String),
+
     #[doc(hidden)]
     // please don't match on this, we're likely to add more variants over time
     __Nonexhaustive,
@@ -136,6 +172,7 @@ impl error::Error for Error {
             Error::MSVC => "pkg-config is incompatible with the MSVC ABI build.",
             Error::Command { .. } => "failed to run pkg-config",
             Error::Failure { .. } => "pkg-config did not exit sucessfully",
+            Error::MetadataParse(_) => "failed to parse metadata from Cargo.toml",
             Error::__Nonexhaustive => panic!(),
         }
     }
@@ -197,6 +234,11 @@ impl fmt::Debug for Error {
                  .field("output", &OutputDebugger(output))
                  .finish()
             }
+            Error::MetadataParse(ref error) => {
+                f.debug_tuple("MetadataParse")
+                 .field(error)
+                 .finish()
+            }
             Error::__Nonexhaustive => panic!(),
         }
     }
@@ -231,6 +273,10 @@ impl fmt::Display for Error {
                 }
                 Ok(())
             }
+            Error::MetadataParse(ref error) => {
+                try!(write!(f, "Failed to parse metadata from Cargo.toml: {}", error));
+                Ok(())
+            }
             Error::__Nonexhaustive => panic!(),
         }
     }
@@ -245,6 +291,42 @@ pub fn find_library(name: &str) -> Result<Library, String> {
 /// Simple shortcut for using all default options for finding a library.
 pub fn probe_library(name: &str) -> Result<Library, Error> {
     Config::new().probe(name)
+}
+
+/// Probe all libraries configured in the Cargo.toml
+/// `[package.metadata.pkg-config]` section.
+pub fn probe_all() -> Result<HashMap<String, Library>, Error> {
+    let dir = try!(env::var_os("CARGO_MANIFEST_DIR").ok_or(
+        Error::MetadataParse("$CARGO_MANIFEST_DIR not set".into())
+    ));
+    let mut path = PathBuf::from(dir);
+    path.push("Cargo.toml");
+    let mut manifest = try!(fs::File::open(&path).map_err(|e| {
+        Error::MetadataParse(format!("Error opening {}: {}", path.display(), e))
+    }));
+    let mut manifest_str = String::new();
+    try!(manifest.read_to_string(&mut manifest_str).map_err(|e| {
+        Error::MetadataParse(format!("Error reading {}: {}", path.display(), e))
+    }));
+    let toml = try!(manifest_str.parse::<toml::Value>().map_err(|e| {
+        Error::MetadataParse(format!("Error parsing {}: {:?}", path.display(), e))
+    }));
+    let key = "package.metadata.pkg-config";
+    let meta = try!(toml.lookup(key).ok_or(
+        Error::MetadataParse(format!("No {} in {}", key, path.display()))
+    ));
+    let table = try!(meta.as_table().ok_or(
+        Error::MetadataParse(format!("{} not a table in {}", key, path.display()))
+    ));
+    let mut libraries = HashMap::new();
+    for (name, version) in table {
+        let version_str = try!(version.as_str().ok_or(
+            Error::MetadataParse(format!("{}.{} not a string in {}", key, name, path.display()))
+        ));
+        let library = try!(Config::new().atleast_version(version_str).probe(name));
+        libraries.insert(name.clone(), library);
+    }
+    Ok(libraries)
 }
 
 /// Run `pkg-config` to get the value of a variable from a package using
