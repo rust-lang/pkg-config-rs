@@ -8,6 +8,21 @@ A simple library meant to be used as a build dependency with Cargo packages in
 order to use the system `pkg-config` tool (if available) to determine where a
 library is located.
 
+# Example
+
+Find the system library named `foo`, with minimum version 1.2.3:
+
+```rust
+extern crate pkg_config;
+
+fn main() {
+    pkg_config::Config::new().atleast_version("1.2.3").probe("foo").unwrap();
+}
+```
+
+Find the system library named `foo`, with no version requirement (not
+recommended):
+
 ```rust
 extern crate pkg_config;
 

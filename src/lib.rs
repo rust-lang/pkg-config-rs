@@ -30,7 +30,18 @@
 //!
 //! # Example
 //!
-//! Find the system library named `foo`.
+//! Find the system library named `foo`, with minimum version 1.2.3:
+//!
+//! ```no_run
+//! extern crate pkg_config;
+//!
+//! fn main() {
+//!     pkg_config::Config::new().atleast_version("1.2.3").probe("foo").unwrap();
+//! }
+//! ```
+//!
+//! Find the system library named `foo`, with no version requirement (not
+//! recommended):
 //!
 //! ```no_run
 //! extern crate pkg_config;
@@ -46,7 +57,7 @@
 //! extern crate pkg_config;
 //!
 //! fn main() {
-//!     pkg_config::Config::new().statik(true).probe("foo").unwrap();
+//!     pkg_config::Config::new().atleast_version("1.2.3").statik(true).probe("foo").unwrap();
 //! }
 //! ```
 
