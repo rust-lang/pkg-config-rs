@@ -8,6 +8,10 @@ A simple library meant to be used as a build dependency with Cargo packages in
 order to use the system `pkg-config` tool (if available) to determine where a
 library is located.
 
+You can use this crate directly to probe for specific libraries, or use
+[metadeps](https://github.com/joshtriplett/metadeps) to declare all your
+`pkg-config` dependencies in `Cargo.toml`.
+
 # Example
 
 Find the system library named `foo`, with minimum version 1.2.3:
