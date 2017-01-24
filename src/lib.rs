@@ -61,7 +61,7 @@
 //! }
 //! ```
 
-#![doc(html_root_url = "http://alexcrichton.com/pkg-config-rs")]
+#![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 #![cfg_attr(test, deny(warnings))]
 
 use std::ascii::AsciiExt;
