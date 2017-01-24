@@ -93,6 +93,7 @@ pub struct Config {
     atleast_version: Option<String>,
     extra_args: Vec<OsString>,
     cargo_metadata: bool,
+    print_system_libs: bool,
 }
 
 #[derive(Debug)]
@@ -274,6 +275,7 @@ impl Config {
             statik: None,
             atleast_version: None,
             extra_args: vec![],
+            print_system_libs: true,
             cargo_metadata: true,
         }
     }
@@ -305,6 +307,15 @@ impl Config {
     /// automatically link the binary. Defaults to `true`.
     pub fn cargo_metadata(&mut self, cargo_metadata: bool) -> &mut Config {
         self.cargo_metadata = cargo_metadata;
+        self
+    }
+
+    /// Enable or disable the `PKG_CONFIG_ALLOW_SYSTEM_LIBS` environment
+    /// variable.
+    ///
+    /// This env var is enabled by default.
+    pub fn print_system_libs(&mut self, print: bool) -> &mut Config {
+        self.print_system_libs = print;
         self
     }
 
@@ -359,8 +370,11 @@ impl Config {
             cmd.arg("--static");
         }
         cmd.args(args)
-           .args(&self.extra_args)
-           .env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
+           .args(&self.extra_args);
+
+        if self.print_system_libs {
+            cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
+        }
         if let Some(ref version) = self.atleast_version {
             cmd.arg(&format!("{} >= {}", name, version));
         } else {
