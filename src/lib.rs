@@ -438,15 +438,15 @@ impl Library {
         for val in &self.libs {
             if statik {
                 if is_system(val, &dirs) {
-                        panic!("The library \"{}\" is a system library, \
-                            which means it can't be linked statically!", val);
-                    }
-                    let meta = format!("rustc-link-lib=static={}", val);
-                    config.print_metadata(&meta);
-                } else {
-                    let meta = format!("rustc-link-lib={}", val);
-                    config.print_metadata(&meta);
+                    panic!("The library \"{}\" is a system library, \
+                        which means it can't be linked statically!", val);
                 }
+                let meta = format!("rustc-link-lib=static={}", val);
+                config.print_metadata(&meta);
+            } else {
+                let meta = format!("rustc-link-lib={}", val);
+                config.print_metadata(&meta);
+            }
         }
 
         let mut iter = output.trim_right().split(' ');
