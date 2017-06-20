@@ -69,7 +69,6 @@ use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
-use std::fs;
 use std::io;
 use std::path::{PathBuf, Path};
 use std::process::{Command, Output};
@@ -430,7 +429,7 @@ impl Library {
                 }
                 "-l" => {
                     self.libs.push(val.to_string());
-                    if statik && !is_system(val, &dirs) {
+                    if statik && is_static_available(val, &dirs) {
                         let meta = format!("rustc-link-lib=static={}", val);
                         config.print_metadata(&meta);
                     } else {
@@ -481,11 +480,18 @@ fn envify(name: &str) -> String {
     }).collect()
 }
 
-fn is_system(name: &str, dirs: &[PathBuf]) -> bool {
+/// System libraries should only be linked dynamically
+fn is_static_available(name: &str, dirs: &[PathBuf]) -> bool {
     let libname = format!("lib{}.a", name);
-    let root = Path::new("/usr");
-    !dirs.iter().any(|d| {
-        !d.starts_with(root) && fs::metadata(&d.join(&libname)).is_ok()
+    let system_roots = if cfg!(target_os = "macos") {
+        vec![Path::new("/Library"), Path::new("/System")]
+    } else {
+        vec![Path::new("/usr")]
+    };
+
+    dirs.iter().any(|dir| {
+        !system_roots.iter().any(|sys| dir.starts_with(sys)) &&
+        dir.join(&libname).exists()
     })
 }
 
@@ -507,4 +513,24 @@ fn run(mut cmd: Command) -> Result<String, Error> {
             cause: cause,
         }),
     }
+}
+
+#[test]
+#[cfg(target_os = "macos")]
+fn system_library_mac_test() {
+    assert!(!is_static_available("PluginManager", &[PathBuf::from("/Library/Frameworks")]));
+    assert!(!is_static_available("python2.7", &[PathBuf::from("/System/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/config")]));
+    assert!(!is_static_available("ffi_convenience", &[PathBuf::from("/Library/Ruby/Gems/2.0.0/gems/ffi-1.9.10/ext/ffi_c/libffi-x86_64/.libs")]));
+
+    // Homebrew is in /usr/local, and it's not a part of the OS
+    if Path::new("/usr/local/lib/libpng16.a").exists() {
+        assert!(is_static_available("png16", &[PathBuf::from("/usr/local/lib")]));
+    }
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn system_library_linux_test() {
+    assert!(!is_static_available("util", &[PathBuf::from("/usr/lib/x86_64-linux-gnu")]));
+    assert!(!is_static_available("dialog", &[PathBuf::from("/usr/lib")]));
 }
