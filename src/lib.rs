@@ -82,7 +82,7 @@ pub fn target_supported() -> bool {
     // override) and then also don't use pkg-config on MSVC as it's really not
     // meant to work there but when building MSVC code in a MSYS shell we may be
     // able to run pkg-config anyway.
-    (host == target || env::var_os("PKG_CONFIG_ALLOW_CROSS").is_some()) &&
+    (host == target || get_var_os("PKG_CONFIG_ALLOW_CROSS").is_some()) &&
     !target.contains("msvc")
 }
 
@@ -330,7 +330,7 @@ impl Config {
     /// `pkg-config` is run.
     pub fn probe(&self, name: &str) -> Result<Library, Error> {
         let abort_var_name = format!("{}_NO_PKG_CONFIG", envify(name));
-        if env::var_os(&abort_var_name).is_some() {
+        if get_var_os(&abort_var_name).is_some() {
             return Err(Error::EnvNoPkgConfig(abort_var_name))
         } else if !target_supported() {
             if env::var("TARGET").unwrap_or(String::new()).contains("msvc") {
@@ -340,6 +340,22 @@ impl Config {
                 return Err(Error::CrossCompilation);
             }
         }
+
+        // pkg-config can be configured via env vars,
+        // and should be probed again if the configuration changes.
+        // Unfortunately, this list is not exhaustive,
+        // because arbitrary `PKG_CONFIG_$PKG_$VAR` can exist.
+        // NB: `get_var_os` automatically marks vars as used.
+        rerun_if_changed("PKG_CONFIG_PATH");
+        rerun_if_changed("PKG_CONFIG_SYSTEM_INCLUDE_PATH");
+        rerun_if_changed("CPATH");
+        rerun_if_changed("INCLUDE");
+        rerun_if_changed("PKG_CONFIG_ALLOW_SYSTEM_CFLAGS");
+        rerun_if_changed("PKG_CONFIG_SYSTEM_LIBRARY_PATH");
+        rerun_if_changed("PKG_CONFIG_ALLOW_SYSTEM_LIBS");
+        rerun_if_changed("PKG_CONFIG_SYSROOT_DIR");
+        rerun_if_changed("PKG_CONFIG_LIBDIR");
+        rerun_if_changed("PKG_CONFIG_DISABLE_UNINSTALLED");
 
         let mut library = Library::new();
 
@@ -363,7 +379,7 @@ impl Config {
     }
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
-        let exe = env::var("PKG_CONFIG").unwrap_or(String::from("pkg-config"));
+        let exe = get_var_os("PKG_CONFIG").unwrap_or(OsString::from("pkg-config"));
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
@@ -461,13 +477,13 @@ impl Library {
 
 fn infer_static(name: &str) -> bool {
     let name = envify(name);
-    if env::var_os(&format!("{}_STATIC", name)).is_some() {
+    if get_var_os(&format!("{}_STATIC", name)).is_some() {
         true
-    } else if env::var_os(&format!("{}_DYNAMIC", name)).is_some() {
+    } else if get_var_os(&format!("{}_DYNAMIC", name)).is_some() {
         false
-    } else if env::var_os("PKG_CONFIG_ALL_STATIC").is_some() {
+    } else if get_var_os("PKG_CONFIG_ALL_STATIC").is_some() {
         true
-    } else if env::var_os("PKG_CONFIG_ALL_DYNAMIC").is_some() {
+    } else if get_var_os("PKG_CONFIG_ALL_DYNAMIC").is_some() {
         false
     } else {
         false
@@ -478,6 +494,17 @@ fn envify(name: &str) -> String {
     name.chars().map(|c| c.to_ascii_uppercase()).map(|c| {
         if c == '-' {'_'} else {c}
     }).collect()
+}
+
+/// Mark build as dependent on the variable
+fn rerun_if_changed(var_name: &str) {
+    println!("cargo:rerun-if-env-changed={}", var_name);
+}
+
+/// Get variable and mark the build as dependent on it
+fn get_var_os(var_name: &str) -> Option<OsString> {
+    rerun_if_changed(var_name);
+    env::var_os(var_name)
 }
 
 /// System libraries should only be linked dynamically
