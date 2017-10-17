@@ -75,8 +75,8 @@ use std::process::{Command, Output};
 use std::str;
 
 pub fn target_supported() -> bool {
-    let target = env::var("TARGET").unwrap_or(String::new());
-    let host = env::var("HOST").unwrap_or(String::new());
+    let target = env::var("TARGET").unwrap_or_else(|_| String::new());
+    let host = env::var("HOST").unwrap_or_else(|_| String::new());
 
     // Only use pkg-config in host == target situations by default (allowing an
     // override) and then also don't use pkg-config on MSVC as it's really not
@@ -86,7 +86,7 @@ pub fn target_supported() -> bool {
     !target.contains("msvc")
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Config {
     statik: Option<bool>,
     atleast_version: Option<String>,
@@ -333,7 +333,7 @@ impl Config {
         if env::var_os(&abort_var_name).is_some() {
             return Err(Error::EnvNoPkgConfig(abort_var_name))
         } else if !target_supported() {
-            if env::var("TARGET").unwrap_or(String::new()).contains("msvc") {
+            if env::var("TARGET").unwrap_or_else(|_| String::new()).contains("msvc") {
                 return Err(Error::MSVC);
             }
             else {
@@ -363,7 +363,7 @@ impl Config {
     }
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
-        let exe = env::var("PKG_CONFIG").unwrap_or(String::from("pkg-config"));
+        let exe = env::var("PKG_CONFIG").unwrap_or_else(|_| String::from("pkg-config"));
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
@@ -411,7 +411,7 @@ impl Library {
 
         let mut dirs = Vec::new();
         let statik = config.is_static(name);
-        for &(flag, val) in parts.iter() {
+        for &(flag, val) in &parts {
             match flag {
                 "-L" => {
                     let meta = format!("rustc-link-search=native={}", val);
