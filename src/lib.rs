@@ -163,7 +163,6 @@ impl error::Error for Error {
 struct OutputDebugger<'a>(&'a Output);
 
 // Lifted from 1.7 std
-#[cfg_attr(feature = "cargo-clippy", allow(needless_borrow))]
 impl<'a> fmt::Debug for OutputDebugger<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let stdout_utf8 = str::from_utf8(&self.0.stdout);
@@ -460,8 +459,6 @@ impl Library {
     }
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(needless_bool))]
-#[cfg_attr(feature = "cargo-clippy", allow(if_same_then_else))]
 fn infer_static(name: &str) -> bool {
     let name = envify(name);
     if env::var_os(&format!("{}_STATIC", name)).is_some() {
