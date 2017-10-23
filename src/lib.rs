@@ -441,7 +441,13 @@ impl Library {
             }
         }
 
-        let mut iter = output.trim_right().split(' ');
+        let mut iter = output.trim_right()
+                             .split(' ')
+                             .flat_map(|arg| if arg.starts_with("-Wl,") {
+                                 arg[4..].split(',').collect()
+                             } else {
+                                 vec![arg]
+                             });
         while let Some(part) = iter.next() {
             if part != "-framework" {
                 continue

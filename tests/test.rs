@@ -80,6 +80,10 @@ fn framework() {
     reset();
     let lib = find("framework").unwrap();
     assert!(lib.frameworks.contains(&"foo".to_string()));
+    assert!(lib.frameworks.contains(&"bar".to_string()));
+    assert!(lib.frameworks.contains(&"baz".to_string()));
+    assert!(lib.frameworks.contains(&"foobar".to_string()));
+    assert!(lib.frameworks.contains(&"foobaz".to_string()));
     assert!(lib.framework_paths.contains(&PathBuf::from("/usr/lib")));
 }
 
