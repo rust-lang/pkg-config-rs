@@ -65,6 +65,7 @@
 #![cfg_attr(test, deny(warnings))]
 
 use std::ascii::AsciiExt;
+use std::collections::HashMap;
 use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
@@ -102,6 +103,7 @@ pub struct Library {
     pub frameworks: Vec<String>,
     pub framework_paths: Vec<PathBuf>,
     pub include_paths: Vec<PathBuf>,
+    pub defines: HashMap<String, Option<String>>,
     pub version: String,
     _priv: (),
 }
@@ -397,6 +399,7 @@ impl Library {
             include_paths: Vec::new(),
             frameworks: Vec::new(),
             framework_paths: Vec::new(),
+            defines: HashMap::new(),
             version: String::new(),
             _priv: (),
         }
@@ -436,6 +439,10 @@ impl Library {
                         let meta = format!("rustc-link-lib={}", val);
                         config.print_metadata(&meta);
                     }
+                }
+                "-D" => {
+                    let mut iter = val.split("=");
+                    self.defines.insert(iter.next().unwrap().to_owned(), iter.next().map(|s| s.replace("\\\"", "\"")));
                 }
                 _ => {}
             }
