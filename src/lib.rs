@@ -343,6 +343,8 @@ impl Config {
             }
         }
 
+        println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
+
         let mut library = Library::new();
 
         let output = try!(run(self.command(name, &["--libs", "--cflags"])));
