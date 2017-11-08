@@ -93,6 +93,7 @@ pub struct Config {
     atleast_version: Option<String>,
     extra_args: Vec<OsString>,
     cargo_metadata: bool,
+    env_metadata: bool,
     print_system_libs: bool,
 }
 
@@ -278,6 +279,7 @@ impl Config {
             extra_args: vec![],
             print_system_libs: true,
             cargo_metadata: true,
+            env_metadata: false,
         }
     }
 
@@ -311,6 +313,14 @@ impl Config {
         self
     }
 
+    /// Define whether metadata should be emitted for cargo allowing to
+    /// automatically rebuild when environment variables change. Defaults to
+    /// `false`.
+    pub fn env_metadata(&mut self, env_metadata: bool) -> &mut Config {
+        self.env_metadata = env_metadata;
+        self
+    }
+
     /// Enable or disable the `PKG_CONFIG_ALLOW_SYSTEM_LIBS` environment
     /// variable.
     ///
@@ -332,18 +342,16 @@ impl Config {
     /// `pkg-config` is run.
     pub fn probe(&self, name: &str) -> Result<Library, Error> {
         let abort_var_name = format!("{}_NO_PKG_CONFIG", envify(name));
-        if env::var_os(&abort_var_name).is_some() {
+        if self.env_var_os(&abort_var_name).is_some() {
             return Err(Error::EnvNoPkgConfig(abort_var_name))
         } else if !target_supported() {
-            if env::var("TARGET").unwrap_or_else(|_| String::new()).contains("msvc") {
+            if self.env_var("TARGET").unwrap_or_else(|_| String::new()).contains("msvc") {
                 return Err(Error::MSVC);
             }
             else {
                 return Err(Error::CrossCompilation);
             }
         }
-
-        println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
 
         let mut library = Library::new();
 
@@ -362,12 +370,26 @@ impl Config {
         get_variable(package, variable).map_err(|e| e.to_string())
     }
 
+    fn env_var(&self, name: &str) -> Result<String, env::VarError> {
+        if self.env_metadata {
+            println!("cargo:rerun-if-env-changed={}", name);
+        }
+        env::var(name)
+    }
+
+    fn env_var_os(&self, name: &str) -> Option<OsString> {
+        if self.env_metadata {
+            println!("cargo:rerun-if-env-changed={}", name);
+        }
+        env::var_os(name)
+    }
+
     fn is_static(&self, name: &str) -> bool {
-        self.statik.unwrap_or_else(|| infer_static(name))
+        self.statik.unwrap_or_else(|| self.infer_static(name))
     }
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
-        let exe = env::var("PKG_CONFIG").unwrap_or_else(|_| String::from("pkg-config"));
+        let exe = self.env_var("PKG_CONFIG").unwrap_or_else(|_| String::from("pkg-config"));
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
@@ -389,6 +411,21 @@ impl Config {
     fn print_metadata(&self, s: &str) {
         if self.cargo_metadata {
             println!("cargo:{}", s);
+        }
+    }
+
+    fn infer_static(&self, name: &str) -> bool {
+        let name = envify(name);
+        if self.env_var_os(&format!("{}_STATIC", name)).is_some() {
+            true
+        } else if self.env_var_os(&format!("{}_DYNAMIC", name)).is_some() {
+            false
+        } else if self.env_var_os("PKG_CONFIG_ALL_STATIC").is_some() {
+            true
+        } else if self.env_var_os("PKG_CONFIG_ALL_DYNAMIC").is_some() {
+            false
+        } else {
+            false
         }
     }
 }
@@ -471,21 +508,6 @@ impl Library {
 
     fn parse_modversion(&mut self, output: &str) {
         self.version.push_str(output.trim());
-    }
-}
-
-fn infer_static(name: &str) -> bool {
-    let name = envify(name);
-    if env::var_os(&format!("{}_STATIC", name)).is_some() {
-        true
-    } else if env::var_os(&format!("{}_DYNAMIC", name)).is_some() {
-        false
-    } else if env::var_os("PKG_CONFIG_ALL_STATIC").is_some() {
-        true
-    } else if env::var_os("PKG_CONFIG_ALL_DYNAMIC").is_some() {
-        false
-    } else {
-        false
     }
 }
 
