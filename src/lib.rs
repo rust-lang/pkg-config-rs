@@ -355,6 +355,9 @@ impl Config {
 
         let mut library = Library::new();
 
+        // just register interest in this env var
+        self.env_var_os("PKG_CONFIG_PATH");
+
         let output = try!(run(self.command(name, &["--libs", "--cflags"])));
         library.parse_libs_cflags(name, &output, self);
 
