@@ -64,6 +64,7 @@
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 #![cfg_attr(test, deny(warnings))]
 
+#[allow(unused_imports)] // this is no longer needed on nightly
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::env;
