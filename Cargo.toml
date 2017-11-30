@@ -16,4 +16,4 @@ keywords = ["build-dependencies"]
 travis-ci = { repository = "alexcrichton/pkg-config-rs" }
 
 [dev-dependencies]
-lazy_static = "0.2"
+lazy_static = "1"
