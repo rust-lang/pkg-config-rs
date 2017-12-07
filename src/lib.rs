@@ -356,9 +356,6 @@ impl Config {
 
         let mut library = Library::new();
 
-        // just register interest in this env var
-        self.env_var_os("PKG_CONFIG_PATH");
-
         let output = try!(run(self.command(name, &["--libs", "--cflags"])));
         library.parse_libs_cflags(name, &output, self);
 
@@ -372,6 +369,19 @@ impl Config {
     #[doc(hidden)]
     pub fn get_variable(package: &str, variable: &str) -> Result<String, String> {
         get_variable(package, variable).map_err(|e| e.to_string())
+    }
+
+    fn targetted_env_var(&self, name: &str) -> Result<String, env::VarError> {
+        if let Ok(target) = env::var("TARGET") {
+            let targetted_name = format!("{}_{}", envify(&target), name);
+            match self.env_var(&targetted_name) {
+                Ok(value) => Ok(value),
+                Err(env::VarError::NotPresent) => self.env_var(name),
+                Err(e) => Err(e)
+            }
+        } else {
+            self.env_var(name)
+        }
     }
 
     fn env_var(&self, name: &str) -> Result<String, env::VarError> {
@@ -401,6 +411,9 @@ impl Config {
         cmd.args(args)
            .args(&self.extra_args);
 
+        if let Ok(value) = self.targetted_env_var("PKG_CONFIG_PATH") {
+            cmd.env("PKG_CONFIG_PATH", value);
+        }
         if self.print_system_libs {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         }
