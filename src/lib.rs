@@ -414,6 +414,9 @@ impl Config {
         if let Ok(value) = self.targetted_env_var("PKG_CONFIG_PATH") {
             cmd.env("PKG_CONFIG_PATH", value);
         }
+        if let Ok(value) = self.targetted_env_var("PKG_CONFIG_LIBDIR") {
+            cmd.env("PKG_CONFIG_LIBDIR", value);
+        }
         if self.print_system_libs {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         }
