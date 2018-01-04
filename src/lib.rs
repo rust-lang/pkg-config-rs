@@ -375,9 +375,9 @@ impl Config {
         if let Ok(target) = env::var("TARGET") {
             let targetted_name = format!("{}_{}", envify(&target), name);
             match self.env_var(&targetted_name) {
-                Ok(value) => Ok(value),
-                Err(env::VarError::NotPresent) => self.env_var(name),
-                Err(e) => Err(e)
+                Ok(value) => { Ok(value) },
+                Err(env::VarError::NotPresent) => { self.env_var(name) },
+                Err(e) => { Err(e) }
             }
         } else {
             self.env_var(name)
@@ -416,6 +416,9 @@ impl Config {
         }
         if let Ok(value) = self.targetted_env_var("PKG_CONFIG_LIBDIR") {
             cmd.env("PKG_CONFIG_LIBDIR", value);
+        }
+        if let Ok(value) = self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR") {
+            cmd.env("PKG_CONFIG_SYSROOT_DIR", value);
         }
         if self.print_system_libs {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
