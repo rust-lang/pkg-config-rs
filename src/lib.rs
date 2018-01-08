@@ -371,16 +371,18 @@ impl Config {
         get_variable(package, variable).map_err(|e| e.to_string())
     }
 
-    fn targetted_env_var(&self, name: &str) -> Result<String, env::VarError> {
+    fn targetted_env_var(&self, var_base: &str) -> Result<String, env::VarError> {
         if let Ok(target) = env::var("TARGET") {
-            let targetted_name = format!("{}_{}", envify(&target), name);
-            match self.env_var(&targetted_name) {
-                Ok(value) => { Ok(value) },
-                Err(env::VarError::NotPresent) => { self.env_var(name) },
-                Err(e) => { Err(e) }
-            }
+            let host = env::var("HOST")?;
+            let kind = if host == target { "HOST" } else { "TARGET" };
+            let target_u = target.replace("-", "_");
+
+            self.env_var(&format!("{}_{}", var_base, target))
+                .or_else(|_| self.env_var(&format!("{}_{}", var_base, target_u)))
+                .or_else(|_| self.env_var(&format!("{}_{}", kind, var_base)))
+                .or_else(|_| self.env_var(var_base))
         } else {
-            self.env_var(name)
+            self.env_var(var_base)
         }
     }
 
