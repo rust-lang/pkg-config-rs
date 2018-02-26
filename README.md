@@ -35,6 +35,23 @@ fn main() {
 }
 ```
 
+# External configuration via target-scoped environment variables
+
+In cross-compilation context, it is useful to manage separately PKG_CONFIG_PATH
+and a few other variables for the `host` and the `target` platform.
+
+The supported variables are: `PKG_CONFIG_PATH`, `PKG_CONFIG_LIBDIR`, and
+`PKG_CONFIG_SYSROOT_DIR`.
+
+Each of these variables can also be supplied with certain prefixes and suffixes, in the following prioritized order:
+
+1. `<var>_<target>` - for example, `PKG_CONFIG_PATH_x86_64-unknown-linux-gnu`
+2. `<var>_<target_with_underscores>` - for example, `PKG_CONFIG_PATH_x86_64_unknown_linux_gnu`
+3. `<build-kind>_<var>` - for example, `HOST_PKG_CONFIG_PATH` or `TARGET_PKG_CONFIG_PATH`
+4. `<var>` - a plain `PKG_CONFIG_PATH`
+
+Also note that `PKG_CONFIG_ALLOW_CROSS` must always be set in cross-compilation context.
+
 # License
 
 This project is licensed under either of
