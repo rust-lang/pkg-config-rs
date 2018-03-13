@@ -265,7 +265,8 @@ pub fn probe_library(name: &str) -> Result<Library, Error> {
 pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
     let cfg = Config::new();
-    Ok(try!(run(cfg.command(package, &[&arg]))).trim_right().to_owned())
+    let out = run(cfg.command(package, &[&arg]))?;
+    Ok(str::from_utf8(&out).unwrap().trim_right().to_owned())
 }
 
 impl Config {
@@ -358,7 +359,7 @@ impl Config {
         library.parse_libs_cflags(name, &output, self);
 
         let output = try!(run(self.command(name, &["--modversion"])));
-        library.parse_modversion(&output);
+        library.parse_modversion(str::from_utf8(&output).unwrap());
 
         Ok(library)
     }
@@ -467,9 +468,9 @@ impl Library {
         }
     }
 
-    fn parse_libs_cflags(&mut self, name: &str, output: &str, config: &Config) {
-        let parts = output.trim_right()
-                          .split(' ')
+    fn parse_libs_cflags(&mut self, name: &str, output: &[u8], config: &Config) {
+        let words = split_flags(output);
+        let parts = words.iter()
                           .filter(|l| l.len() > 2)
                           .map(|arg| (&arg[0..2], &arg[2..]))
                           .collect::<Vec<_>>();
@@ -504,18 +505,17 @@ impl Library {
                 }
                 "-D" => {
                     let mut iter = val.split("=");
-                    self.defines.insert(iter.next().unwrap().to_owned(), iter.next().map(|s| s.replace("\\\"", "\"")));
+                    self.defines.insert(iter.next().unwrap().to_owned(), iter.next().map(|s| s.to_owned()));
                 }
                 _ => {}
             }
         }
 
-        let mut iter = output.trim_right()
-                             .split(' ')
-                             .flat_map(|arg| if arg.starts_with("-Wl,") {
+        let mut iter = words.iter()
+                            .flat_map(|arg| if arg.starts_with("-Wl,") {
                                  arg[4..].split(',').collect()
                              } else {
-                                 vec![arg]
+                                 vec![arg.as_ref()]
                              });
         while let Some(part) = iter.next() {
             if part != "-framework" {
@@ -555,12 +555,11 @@ fn is_static_available(name: &str, dirs: &[PathBuf]) -> bool {
     })
 }
 
-fn run(mut cmd: Command) -> Result<String, Error> {
+fn run(mut cmd: Command) -> Result<Vec<u8>, Error> {
     match cmd.output() {
         Ok(output) => {
             if output.status.success() {
-                let stdout = String::from_utf8(output.stdout).unwrap();
-                Ok(stdout)
+                Ok(output.stdout)
             } else {
                 Err(Error::Failure {
                     command: format!("{:?}", cmd),
@@ -573,6 +572,44 @@ fn run(mut cmd: Command) -> Result<String, Error> {
             cause: cause,
         }),
     }
+}
+
+/// Split output produced by pkg-config --cflags and / or --libs into separate flags.
+/// 
+/// Backslash in output is used to preserve literal meaning of following byte.  Different words are
+/// separated by unescaped space. Other whitespace characters generally should not occur unescaped
+/// at all, apart from the newline at the end of output. For compatibility with what others
+/// consumers of pkg-config output would do in this scenario, they are used here for splitting as
+/// well.
+fn split_flags(output: &[u8]) -> Vec<String> {
+    let mut word = Vec::new();
+    let mut words = Vec::new();
+    let mut escaped = false;
+
+    for &b in output {
+        match b {
+            _ if escaped => {
+                escaped = false;
+                word.push(b);
+            }
+            b'\\' => {
+                escaped = true
+            }
+            b'\t' | b'\n' | b'\r' | b' ' => {
+                if !word.is_empty() {
+                    words.push(String::from_utf8(word).unwrap());
+                    word = Vec::new();
+                }
+            }
+            _ => word.push(b),
+        }
+    }
+
+    if !word.is_empty() {
+        words.push(String::from_utf8(word).unwrap());
+    }
+
+    words
 }
 
 #[test]

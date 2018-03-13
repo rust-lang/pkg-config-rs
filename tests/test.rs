@@ -75,6 +75,21 @@ fn output_ok() {
 }
 
 #[test]
+fn escapes() {
+    let _g = LOCK.lock();
+    reset();
+    let lib = find("escape").unwrap();
+    assert!(lib.include_paths.contains(&PathBuf::from("include path with spaces")));
+    assert!(lib.link_paths.contains(&PathBuf::from("link path with spaces")));
+    assert_eq!(lib.defines.get("A"),
+               Some(&Some("\"escaped string' literal\"".to_owned())));
+    assert_eq!(lib.defines.get("B"),
+               Some(&Some("ESCAPED IDENTIFIER".to_owned())));
+    assert_eq!(lib.defines.get("FOX"),
+               Some(&Some("🦊".to_owned())));
+}
+
+#[test]
 fn framework() {
     let _g = LOCK.lock();
     reset();
