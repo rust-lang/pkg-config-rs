@@ -235,12 +235,12 @@ impl fmt::Display for Error {
             Error::Failure { ref command, ref output } => {
                 let stdout = str::from_utf8(&output.stdout).unwrap();
                 let stderr = str::from_utf8(&output.stderr).unwrap();
-                try!(write!(f, "`{}` did not exit successfully: {}", command, output.status));
+                write!(f, "`{}` did not exit successfully: {}", command, output.status)?;
                 if !stdout.is_empty() {
-                    try!(write!(f, "\n--- stdout\n{}", stdout));
+                    write!(f, "\n--- stdout\n{}", stdout)?;
                 }
                 if !stderr.is_empty() {
-                    try!(write!(f, "\n--- stderr\n{}", stderr));
+                    write!(f, "\n--- stderr\n{}", stderr)?;
                 }
                 Ok(())
             }
@@ -355,10 +355,10 @@ impl Config {
 
         let mut library = Library::new();
 
-        let output = try!(run(self.command(name, &["--libs", "--cflags"])));
+        let output = run(self.command(name, &["--libs", "--cflags"]))?;
         library.parse_libs_cflags(name, &output, self);
 
-        let output = try!(run(self.command(name, &["--modversion"])));
+        let output = run(self.command(name, &["--modversion"]))?;
         library.parse_modversion(str::from_utf8(&output).unwrap());
 
         Ok(library)
