@@ -62,7 +62,6 @@
 //! ```
 
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
-#![cfg_attr(test, deny(warnings))]
 
 #[allow(unused_imports)] // Required for Rust <1.23
 use std::ascii::AsciiExt;
@@ -577,7 +576,7 @@ fn run(mut cmd: Command) -> Result<Vec<u8>, Error> {
 }
 
 /// Split output produced by pkg-config --cflags and / or --libs into separate flags.
-/// 
+///
 /// Backslash in output is used to preserve literal meaning of following byte.  Different words are
 /// separated by unescaped space. Other whitespace characters generally should not occur unescaped
 /// at all, apart from the newline at the end of output. For compatibility with what others
