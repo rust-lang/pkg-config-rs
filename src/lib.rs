@@ -486,6 +486,11 @@ impl Library {
                 }
                 "-l" => {
                     if is_msvc {
+                        // These are provided by the CRT with MSVC
+                        if ["m", "c", "pthread"].contains(&val) {
+                            continue;
+                        }
+
                         // We need to convert -lfoo to foo.lib for MSVC as that
                         // is the name of the import library
                         self.libs.push(format!("{}.lib", val));
