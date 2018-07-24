@@ -393,11 +393,6 @@ impl Config {
         if self.is_static(name) {
             cmd.arg("--static");
         }
-        if let Ok(target) = env::var("TARGET") {
-            if target.contains("msvc") {
-                cmd.arg("--msvc-syntax");
-            }
-        }
         cmd.args(args)
            .args(&self.extra_args);
 
@@ -458,6 +453,13 @@ impl Library {
     }
 
     fn parse_libs_cflags(&mut self, name: &str, output: &[u8], config: &Config) {
+        let mut is_msvc = false;
+        if let Ok(target) = env::var("TARGET") {
+            if target.contains("msvc") {
+                is_msvc = true;
+            }
+        }
+
         let words = split_flags(output);
         let parts = words.iter()
                           .filter(|l| l.len() > 2)
@@ -483,14 +485,28 @@ impl Library {
                     self.include_paths.push(PathBuf::from(val));
                 }
                 "-l" => {
-                    self.libs.push(val.to_string());
+                    let libname = if is_msvc {
+                        // These are provided by the CRT with MSVC
+                        if ["m", "c", "pthread"].contains(&val) {
+                            continue;
+                        }
+
+                        // We need to convert -lfoo to foo.lib for MSVC as that
+                        // is the name of the import library
+                        format!("{}.lib", val)
+                    } else {
+                        val.to_string()
+                    };
+
                     if statik && is_static_available(val, &dirs) {
-                        let meta = format!("rustc-link-lib=static={}", val);
+                        let meta = format!("rustc-link-lib=static={}", libname);
                         config.print_metadata(&meta);
                     } else {
-                        let meta = format!("rustc-link-lib={}", val);
+                        let meta = format!("rustc-link-lib={}", libname);
                         config.print_metadata(&meta);
                     }
+
+                    self.libs.push(libname);
                 }
                 "-D" => {
                     let mut iter = val.split("=");
