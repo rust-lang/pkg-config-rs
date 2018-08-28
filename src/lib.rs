@@ -485,28 +485,20 @@ impl Library {
                     self.include_paths.push(PathBuf::from(val));
                 }
                 "-l" => {
-                    let libname = if is_msvc {
-                        // These are provided by the CRT with MSVC
-                        if ["m", "c", "pthread"].contains(&val) {
-                            continue;
-                        }
-
-                        // We need to convert -lfoo to foo.lib for MSVC as that
-                        // is the name of the import library
-                        format!("{}.lib", val)
-                    } else {
-                        val.to_string()
-                    };
+                    // These are provided by the CRT with MSVC
+                    if is_msvc && ["m", "c", "pthread"].contains(&val) {
+                        continue;
+                    }
 
                     if statik && is_static_available(val, &dirs) {
-                        let meta = format!("rustc-link-lib=static={}", libname);
+                        let meta = format!("rustc-link-lib=static={}", val);
                         config.print_metadata(&meta);
                     } else {
-                        let meta = format!("rustc-link-lib={}", libname);
+                        let meta = format!("rustc-link-lib={}", val);
                         config.print_metadata(&meta);
                     }
 
-                    self.libs.push(libname);
+                    self.libs.push(val.to_string());
                 }
                 "-D" => {
                     let mut iter = val.split("=");
