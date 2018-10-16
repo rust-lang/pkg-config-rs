@@ -412,10 +412,24 @@ impl Config {
         if self.print_system_libs {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         }
-        if let Bound::Included(ref version) = self.min_version {
-            cmd.arg(&format!("{} >= {}", name, version));
-        } else {
-            cmd.arg(name);
+        cmd.arg(name);
+        match self.min_version {
+            Bound::Included(ref version) => {
+                cmd.arg(&format!("{} >= {}", name, version));
+            }
+            Bound::Excluded(ref version) => {
+                cmd.arg(&format!("{} > {}", name, version));
+            }
+            _ => (),
+        }
+        match self.max_version {
+            Bound::Included(ref version) => {
+                cmd.arg(&format!("{} <= {}", name, version));
+            }
+            Bound::Excluded(ref version) => {
+                cmd.arg(&format!("{} < {}", name, version));
+            }
+            _ => (),
         }
         cmd
     }
