@@ -71,7 +71,7 @@ use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
-use std::ops::Bound;
+use std::ops::{Bound, RangeBounds};
 use std::path::{PathBuf, Path};
 use std::process::{Command, Output};
 use std::str;
@@ -295,6 +295,24 @@ impl Config {
     pub fn eq_version(&mut self, vers: &str) -> &mut Config {
         self.min_version = Bound::Included(vers.to_string());
         self.max_version = Bound::Included(vers.to_string());
+        self
+    }
+
+    /// Indicate that the library's version must be in `range`.
+    pub fn range_version<'a, R>(&mut self, range: R) -> &mut Config
+    where
+        R: RangeBounds<&'a str>
+    {
+        self.min_version = match range.start_bound() {
+            Bound::Included(vers) => Bound::Included(vers.to_string()),
+            Bound::Excluded(vers) => Bound::Excluded(vers.to_string()),
+            Bound::Unbounded => Bound::Unbounded,
+        };
+        self.max_version = match range.end_bound() {
+            Bound::Included(vers) => Bound::Included(vers.to_string()),
+            Bound::Excluded(vers) => Bound::Excluded(vers.to_string()),
+            Bound::Unbounded => Bound::Unbounded,
+        };
         self
     }
 
