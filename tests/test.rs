@@ -116,3 +116,115 @@ fn version() {
     reset();
     assert_eq!(&find("foo").unwrap().version[..], "3.10.0.SVN");
 }
+
+#[test]
+fn atleast_version_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().atleast_version("3.10").probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn atleast_version_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().atleast_version("3.11").probe("foo").unwrap();
+}
+
+#[test]
+fn exactly_version_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().exactly_version("3.10.0.SVN").probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn exactly_version_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().exactly_version("3.10.0").probe("foo").unwrap();
+}
+
+#[test]
+fn range_version_range_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("4.2.0".."4.4.0").probe("escape").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("4.0.0".."4.2.0").probe("escape").unwrap();
+}
+
+#[test]
+fn range_version_range_inclusive_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("4.0.0"..="4.2.0").probe("escape").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_inclusive_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("3.8.0"..="4.0.0").probe("escape").unwrap();
+}
+
+#[test]
+fn range_version_range_from_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("4.0.0"..).probe("escape").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_from_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("4.4.0"..).probe("escape").unwrap();
+}
+
+#[test]
+fn range_version_range_to_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(.."4.4.0").probe("escape").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_to_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(.."4.2.0").probe("escape").unwrap();
+}
+
+#[test]
+fn range_version_range_to_inclusive_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(..="4.2.0").probe("escape").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_to_inclusive_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(..="4.0.0").probe("escape").unwrap();
+}
+
+#[test]
+fn range_version_full() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(..).probe("escape").unwrap();
+}

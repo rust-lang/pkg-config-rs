@@ -71,6 +71,7 @@ use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
+use std::ops::{Bound, RangeBounds};
 use std::path::{PathBuf, Path};
 use std::process::{Command, Output};
 use std::str;
@@ -84,10 +85,11 @@ pub fn target_supported() -> bool {
     (host == target || env::var_os("PKG_CONFIG_ALLOW_CROSS").is_some())
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Config {
     statik: Option<bool>,
-    atleast_version: Option<String>,
+    min_version: Bound<String>,
+    max_version: Bound<String>,
     extra_args: Vec<OsString>,
     cargo_metadata: bool,
     env_metadata: bool,
@@ -264,7 +266,8 @@ impl Config {
     pub fn new() -> Config {
         Config {
             statik: None,
-            atleast_version: None,
+            min_version: Bound::Unbounded,
+            max_version: Bound::Unbounded,
             extra_args: vec![],
             print_system_libs: true,
             cargo_metadata: true,
@@ -283,7 +286,33 @@ impl Config {
 
     /// Indicate that the library must be at least version `vers`.
     pub fn atleast_version(&mut self, vers: &str) -> &mut Config {
-        self.atleast_version = Some(vers.to_string());
+        self.min_version = Bound::Included(vers.to_string());
+        self.max_version = Bound::Unbounded;
+        self
+    }
+
+    /// Indicate that the library must be equal to version `vers`.
+    pub fn exactly_version(&mut self, vers: &str) -> &mut Config {
+        self.min_version = Bound::Included(vers.to_string());
+        self.max_version = Bound::Included(vers.to_string());
+        self
+    }
+
+    /// Indicate that the library's version must be in `range`.
+    pub fn range_version<'a, R>(&mut self, range: R) -> &mut Config
+    where
+        R: RangeBounds<&'a str>
+    {
+        self.min_version = match range.start_bound() {
+            Bound::Included(vers) => Bound::Included(vers.to_string()),
+            Bound::Excluded(vers) => Bound::Excluded(vers.to_string()),
+            Bound::Unbounded => Bound::Unbounded,
+        };
+        self.max_version = match range.end_bound() {
+            Bound::Included(vers) => Bound::Included(vers.to_string()),
+            Bound::Excluded(vers) => Bound::Excluded(vers.to_string()),
+            Bound::Unbounded => Bound::Unbounded,
+        };
         self
     }
 
@@ -408,10 +437,24 @@ impl Config {
         if self.print_system_libs {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         }
-        if let Some(ref version) = self.atleast_version {
-            cmd.arg(&format!("{} >= {}", name, version));
-        } else {
-            cmd.arg(name);
+        cmd.arg(name);
+        match self.min_version {
+            Bound::Included(ref version) => {
+                cmd.arg(&format!("{} >= {}", name, version));
+            }
+            Bound::Excluded(ref version) => {
+                cmd.arg(&format!("{} > {}", name, version));
+            }
+            _ => (),
+        }
+        match self.max_version {
+            Bound::Included(ref version) => {
+                cmd.arg(&format!("{} <= {}", name, version));
+            }
+            Bound::Excluded(ref version) => {
+                cmd.arg(&format!("{} < {}", name, version));
+            }
+            _ => (),
         }
         cmd
     }
@@ -434,6 +477,22 @@ impl Config {
             false
         } else {
             false
+        }
+    }
+}
+
+
+// Implement Default manualy since Bound does not implement Default.
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            statik: None,
+            min_version: Bound::Unbounded,
+            max_version: Bound::Unbounded,
+            extra_args: vec![],
+            print_system_libs: false,
+            cargo_metadata: false,
+            env_metadata: false,
         }
     }
 }
