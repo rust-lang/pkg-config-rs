@@ -116,3 +116,18 @@ fn version() {
     reset();
     assert_eq!(&find("foo").unwrap().version[..], "3.10.0.SVN");
 }
+
+#[test]
+fn atleast_version_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().atleast_version("3.10").probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn atleast_version_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().atleast_version("3.11").probe("foo").unwrap();
+}
