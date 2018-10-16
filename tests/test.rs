@@ -131,3 +131,18 @@ fn atleast_version_ng() {
     reset();
     pkg_config::Config::new().atleast_version("3.11").probe("foo").unwrap();
 }
+
+#[test]
+fn eq_version_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().eq_version("3.10.0.SVN").probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn eq_version_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().eq_version("3.10.0").probe("foo").unwrap();
+}
