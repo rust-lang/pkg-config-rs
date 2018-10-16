@@ -146,3 +146,55 @@ fn eq_version_ng() {
     reset();
     pkg_config::Config::new().eq_version("3.10.0").probe("foo").unwrap();
 }
+
+#[test]
+fn range_version_range_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("3.10".."3.12").probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("3.12".."3.15").probe("foo").unwrap();
+}
+
+#[test]
+fn range_version_range_from_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("3.10"..).probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_from_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version("3.12"..).probe("foo").unwrap();
+}
+
+#[test]
+fn range_version_range_to_ok() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(.."3.12").probe("foo").unwrap();
+}
+
+#[test]
+#[should_panic]
+fn range_version_range_to_ng() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(.."3.9").probe("foo").unwrap();
+}
+
+#[test]
+fn range_version_full() {
+    let _g = LOCK.lock();
+    reset();
+    pkg_config::Config::new().range_version(..).probe("foo").unwrap();
+}
