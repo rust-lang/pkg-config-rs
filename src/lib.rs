@@ -292,7 +292,7 @@ impl Config {
     }
 
     /// Indicate that the library must be equal to version `vers`.
-    pub fn eq_version(&mut self, vers: &str) -> &mut Config {
+    pub fn exactly_version(&mut self, vers: &str) -> &mut Config {
         self.min_version = Bound::Included(vers.to_string());
         self.max_version = Bound::Included(vers.to_string());
         self
