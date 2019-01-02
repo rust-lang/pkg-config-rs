@@ -1,6 +1,6 @@
 # pkg-config-rs
 
-[![Build Status](https://travis-ci.org/alexcrichton/pkg-config-rs.svg?branch=master)](https://travis-ci.org/alexcrichton/pkg-config-rs)
+[![Build Status](https://travis-ci.com/alexcrichton/pkg-config-rs.svg?branch=master)](https://travis-ci.com/alexcrichton/pkg-config-rs)
 [![Rust](https://img.shields.io/badge/rust-1.13%2B-blue.svg?maxAge=3600)](https://github.com/alexcrichton/pkg-config-rs/)
 
 [Documentation](https://docs.rs/pkg-config)
