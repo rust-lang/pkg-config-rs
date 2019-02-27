@@ -109,6 +109,7 @@ pub struct Library {
 }
 
 /// Represents all reasons `pkg-config` might not succeed or be run at all.
+#[derive(Debug)]
 pub enum Error {
     /// Aborted because of `*_NO_PKG_CONFIG` environment variable.
     ///
@@ -153,59 +154,6 @@ impl error::Error for Error {
         match *self {
             Error::Command { ref cause, .. } => Some(cause),
             _ => None,
-        }
-    }
-}
-
-// Workaround for temporary lack of impl Debug for Output in stable std
-struct OutputDebugger<'a>(&'a Output);
-
-// Lifted from 1.7 std
-impl<'a> fmt::Debug for OutputDebugger<'a> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let stdout_utf8 = str::from_utf8(&self.0.stdout);
-        let stdout_debug: &fmt::Debug = match stdout_utf8 {
-            Ok(ref str) => str,
-            Err(_) => &self.0.stdout
-        };
-
-        let stderr_utf8 = str::from_utf8(&self.0.stderr);
-        let stderr_debug: &fmt::Debug = match stderr_utf8 {
-            Ok(ref str) => str,
-            Err(_) => &self.0.stderr
-        };
-
-        fmt.debug_struct("Output")
-           .field("status", &self.0.status)
-           .field("stdout", stdout_debug)
-           .field("stderr", stderr_debug)
-           .finish()
-    }
-}
-
-// Workaround for temporary lack of impl Debug for Output in stable std, continued
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            Error::EnvNoPkgConfig(ref name) => {
-                f.debug_tuple("EnvNoPkgConfig")
-                 .field(name)
-                 .finish()
-            }
-            Error::CrossCompilation => write!(f, "CrossCompilation"),
-            Error::Command { ref command, ref cause } => {
-                f.debug_struct("Command")
-                 .field("command", command)
-                 .field("cause", cause)
-                 .finish()
-            }
-            Error::Failure { ref command, ref output } => {
-                f.debug_struct("Failure")
-                 .field("command", command)
-                 .field("output", &OutputDebugger(output))
-                 .finish()
-            }
-            Error::__Nonexhaustive => panic!(),
         }
     }
 }
