@@ -63,9 +63,6 @@
 
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 
-#[allow(unused_imports)] // Required for Rust <1.23
-#[allow(deprecated)]
-use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::env;
 use std::error;
@@ -204,7 +201,7 @@ pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
     let cfg = Config::new();
     let out = run(cfg.command(package, &[&arg]))?;
-    Ok(str::from_utf8(&out).unwrap().trim_right().to_owned())
+    Ok(str::from_utf8(&out).unwrap().trim_end().to_owned())
 }
 
 impl Config {
