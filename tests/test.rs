@@ -16,6 +16,7 @@ fn reset() {
         if k.contains("DYNAMIC") ||
            k.contains("STATIC") ||
            k.contains("PKG_CONFIG_ALLOW_CROSS") ||
+           k.contains("PKG_CONFIG_SYSROOT_DIR") ||
            k.contains("FOO_NO_PKG_CONFIG") {
             env::remove_var(&k);
         }
@@ -49,6 +50,30 @@ fn cross_enabled() {
     env::set_var("HOST", "bar");
     env::set_var("PKG_CONFIG_ALLOW_CROSS", "1");
     find("foo").unwrap();
+}
+
+#[test]
+fn cross_enabled_if_customized() {
+    let _g = LOCK.lock();
+    reset();
+    env::set_var("TARGET", "foo");
+    env::set_var("HOST", "bar");
+    env::set_var("PKG_CONFIG_SYSROOT_DIR", "/tmp/cross-test");
+    find("foo").unwrap();
+}
+
+#[test]
+fn cross_disabled_if_customized() {
+    let _g = LOCK.lock();
+    reset();
+    env::set_var("TARGET", "foo");
+    env::set_var("HOST", "bar");
+    env::set_var("PKG_CONFIG_ALLOW_CROSS", "0");
+    env::set_var("PKG_CONFIG_SYSROOT_DIR", "/tmp/cross-test");
+    match find("foo") {
+        Err(Error::CrossCompilation) => {},
+        _ => panic!("expected CrossCompilation failure"),
+    }
 }
 
 #[test]
