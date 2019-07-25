@@ -1,6 +1,7 @@
 language: rust
 matrix:
   include:
+    - rust: 1.28.0
     - rust: stable
     - rust: beta
     - rust: nightly
