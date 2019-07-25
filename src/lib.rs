@@ -64,6 +64,7 @@
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 
 #[allow(unused_imports)] // Required for Rust <1.23
+#[allow(deprecated)]
 use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::env;
@@ -75,15 +76,6 @@ use std::ops::{Bound, RangeBounds};
 use std::path::{PathBuf, Path};
 use std::process::{Command, Output};
 use std::str;
-
-pub fn target_supported() -> bool {
-    let target = env::var("TARGET").unwrap_or_else(|_| String::new());
-    let host = env::var("HOST").unwrap_or_else(|_| String::new());
-
-    // Only use pkg-config in host == target situations by default (allowing an
-    // override).
-    (host == target || env::var_os("PKG_CONFIG_ALLOW_CROSS").is_some())
-}
 
 #[derive(Clone)]
 pub struct Config {
@@ -310,7 +302,7 @@ impl Config {
         let abort_var_name = format!("{}_NO_PKG_CONFIG", envify(name));
         if self.env_var_os(&abort_var_name).is_some() {
             return Err(Error::EnvNoPkgConfig(abort_var_name))
-        } else if !target_supported() {
+        } else if !self.target_supported() {
             return Err(Error::CrossCompilation);
         }
 
@@ -323,6 +315,31 @@ impl Config {
         library.parse_modversion(str::from_utf8(&output).unwrap());
 
         Ok(library)
+    }
+
+    pub fn target_supported(&self) -> bool {
+        let target = env::var("TARGET").unwrap_or_default();
+        let host = env::var("HOST").unwrap_or_default();
+
+        // Only use pkg-config in host == target situations by default (allowing an
+        // override).
+        if host == target {
+            return true;
+        }
+
+        // pkg-config may not be aware of cross-compilation, and require
+        // a wrapper script that sets up platform-specific prefixes.
+        match self.targetted_env_var("PKG_CONFIG_ALLOW_CROSS") {
+            // don't use pkg-config if explicitly disabled
+            Ok(ref val) if val == "0" => false,
+            Ok(_) => true,
+            Err(_) => {
+                // if not disabled, and pkg-config is customized,
+                // then assume it's prepared for cross-compilation
+                self.targetted_env_var("PKG_CONFIG").is_ok() ||
+                self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR").is_ok()
+            },
+        }
     }
 
     /// Deprecated in favor of the top level `get_variable` function
