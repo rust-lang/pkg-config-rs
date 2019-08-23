@@ -108,6 +108,9 @@ pub enum Error {
     /// Contains the name of the responsible environment variable.
     EnvNoPkgConfig(String),
 
+    /// `pkg-config` could not be found on the system
+    ///
+    NotInstalled(String),
     /// Cross compilation detected.
     ///
     /// Override with `PKG_CONFIG_ALLOW_CROSS=1`.
@@ -132,6 +135,7 @@ impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::EnvNoPkgConfig(_) => "pkg-config requested to be aborted",
+            Error::NotInstalled(_) => "pkg-config does not appear to be installed",
             Error::CrossCompilation => {
                 "pkg-config doesn't handle cross compilation. \
                  Use PKG_CONFIG_ALLOW_CROSS=1 to override"
@@ -156,6 +160,7 @@ impl fmt::Display for Error {
             Error::EnvNoPkgConfig(ref name) => {
                 write!(f, "Aborted because {} is set", name)
             }
+            Error::NotInstalled(_) => write!(f, "pkg-config does not appear to be installed"),
             Error::CrossCompilation => {
                 write!(f, "Cross compilation detected. \
                        Use PKG_CONFIG_ALLOW_CROSS=1 to override")
@@ -188,14 +193,14 @@ pub fn find_library(name: &str) -> Result<Library, String> {
 
 /// Simple shortcut for using all default options for finding a library.
 pub fn probe_library(name: &str) -> Result<Library, Error> {
-    Config::new().probe(name)
+    Config::new()?.probe(name)
 }
 
 /// Run `pkg-config` to get the value of a variable from a package using
 /// --variable.
 pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
-    let cfg = Config::new();
+    let cfg = Config::new()?;
     let out = run(cfg.command(package, &[&arg]))?;
     Ok(str::from_utf8(&out).unwrap().trim_right().to_owned())
 }
@@ -203,8 +208,13 @@ pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
 impl Config {
     /// Creates a new set of configuration options which are all initially set
     /// to "blank".
-    pub fn new() -> Config {
-        Config {
+    pub fn new() -> Result<Config, Error> {
+
+        if let Err(code) = Command::new("pkg-config").arg("-h").status() {
+            //println!("could not find pkg-config, {:?}", Command::new("pkg-config").output());
+            return Err(Error::NotInstalled(String::from("")))
+        }
+        Ok(Config {
             statik: None,
             min_version: Bound::Unbounded,
             max_version: Bound::Unbounded,
@@ -212,7 +222,7 @@ impl Config {
             print_system_libs: true,
             cargo_metadata: true,
             env_metadata: false,
-        }
+        })
     }
 
     /// Indicate whether the `--static` flag should be passed.
