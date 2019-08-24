@@ -73,7 +73,7 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::ops::{Bound, RangeBounds};
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::str;
 
@@ -110,7 +110,7 @@ pub enum Error {
 
     /// `pkg-config` could not be found on the system
     ///
-    NotInstalled(String),
+    NotInstalled,
     /// Cross compilation detected.
     ///
     /// Override with `PKG_CONFIG_ALLOW_CROSS=1`.
@@ -130,12 +130,11 @@ pub enum Error {
     // please don't match on this, we're likely to add more variants over time
     __Nonexhaustive,
 }
-
 impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
             Error::EnvNoPkgConfig(_) => "pkg-config requested to be aborted",
-            Error::NotInstalled(_) => "pkg-config does not appear to be installed",
+            Error::NotInstalled => "pkg-config does not appear to be installed",
             Error::CrossCompilation => {
                 "pkg-config doesn't handle cross compilation. \
                  Use PKG_CONFIG_ALLOW_CROSS=1 to override"
@@ -157,21 +156,28 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
-            Error::EnvNoPkgConfig(ref name) => {
-                write!(f, "Aborted because {} is set", name)
-            }
-            Error::NotInstalled(_) => write!(f, "pkg-config does not appear to be installed"),
-            Error::CrossCompilation => {
-                write!(f, "Cross compilation detected. \
-                       Use PKG_CONFIG_ALLOW_CROSS=1 to override")
-            }
-            Error::Command { ref command, ref cause } => {
-                write!(f, "Failed to run `{}`: {}", command, cause)
-            }
-            Error::Failure { ref command, ref output } => {
+            Error::EnvNoPkgConfig(ref name) => write!(f, "Aborted because {} is set", name),
+            Error::NotInstalled => write!(f, "pkg-config does not appear to be installed"),
+            Error::CrossCompilation => write!(
+                f,
+                "Cross compilation detected. \
+                 Use PKG_CONFIG_ALLOW_CROSS=1 to override"
+            ),
+            Error::Command {
+                ref command,
+                ref cause,
+            } => write!(f, "Failed to run `{}`: {}", command, cause),
+            Error::Failure {
+                ref command,
+                ref output,
+            } => {
                 let stdout = str::from_utf8(&output.stdout).unwrap();
                 let stderr = str::from_utf8(&output.stderr).unwrap();
-                write!(f, "`{}` did not exit successfully: {}", command, output.status)?;
+                write!(
+                    f,
+                    "`{}` did not exit successfully: {}",
+                    command, output.status
+                )?;
                 if !stdout.is_empty() {
                     write!(f, "\n--- stdout\n{}", stdout)?;
                 }
@@ -209,10 +215,8 @@ impl Config {
     /// Creates a new set of configuration options which are all initially set
     /// to "blank".
     pub fn new() -> Result<Config, Error> {
-
-        if let Err(code) = Command::new("pkg-config").arg("-h").status() {
-            //println!("could not find pkg-config, {:?}", Command::new("pkg-config").output());
-            return Err(Error::NotInstalled(String::from("")))
+        if let Err(_) = Command::new("pkg-config").arg("-h").output() {
+            return Err(Error::NotInstalled);
         }
         Ok(Config {
             statik: None,
@@ -251,7 +255,7 @@ impl Config {
     /// Indicate that the library's version must be in `range`.
     pub fn range_version<'a, R>(&mut self, range: R) -> &mut Config
     where
-        R: RangeBounds<&'a str>
+        R: RangeBounds<&'a str>,
     {
         self.min_version = match range.start_bound() {
             Bound::Included(vers) => Bound::Included(vers.to_string()),
@@ -311,7 +315,7 @@ impl Config {
     pub fn probe(&self, name: &str) -> Result<Library, Error> {
         let abort_var_name = format!("{}_NO_PKG_CONFIG", envify(name));
         if self.env_var_os(&abort_var_name).is_some() {
-            return Err(Error::EnvNoPkgConfig(abort_var_name))
+            return Err(Error::EnvNoPkgConfig(abort_var_name));
         } else if !self.target_supported() {
             return Err(Error::CrossCompilation);
         }
@@ -346,9 +350,9 @@ impl Config {
             Err(_) => {
                 // if not disabled, and pkg-config is customized,
                 // then assume it's prepared for cross-compilation
-                self.targetted_env_var("PKG_CONFIG").is_ok() ||
-                self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR").is_ok()
-            },
+                self.targetted_env_var("PKG_CONFIG").is_ok()
+                    || self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR").is_ok()
+            }
         }
     }
 
@@ -392,13 +396,14 @@ impl Config {
     }
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
-        let exe = self.env_var("PKG_CONFIG").unwrap_or_else(|_| String::from("pkg-config"));
+        let exe = self
+            .env_var("PKG_CONFIG")
+            .unwrap_or_else(|_| String::from("pkg-config"));
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
         }
-        cmd.args(args)
-           .args(&self.extra_args);
+        cmd.args(args).args(&self.extra_args);
 
         if let Ok(value) = self.targetted_env_var("PKG_CONFIG_PATH") {
             cmd.env("PKG_CONFIG_PATH", value);
@@ -456,7 +461,6 @@ impl Config {
     }
 }
 
-
 // Implement Default manualy since Bound does not implement Default.
 impl Default for Config {
     fn default() -> Config {
@@ -495,10 +499,11 @@ impl Library {
         }
 
         let words = split_flags(output);
-        let parts = words.iter()
-                          .filter(|l| l.len() > 2)
-                          .map(|arg| (&arg[0..2], &arg[2..]))
-                          .collect::<Vec<_>>();
+        let parts = words
+            .iter()
+            .filter(|l| l.len() > 2)
+            .map(|arg| (&arg[0..2], &arg[2..]))
+            .collect::<Vec<_>>();
 
         let mut dirs = Vec::new();
         let statik = config.is_static(name);
@@ -536,21 +541,25 @@ impl Library {
                 }
                 "-D" => {
                     let mut iter = val.split("=");
-                    self.defines.insert(iter.next().unwrap().to_owned(), iter.next().map(|s| s.to_owned()));
+                    self.defines.insert(
+                        iter.next().unwrap().to_owned(),
+                        iter.next().map(|s| s.to_owned()),
+                    );
                 }
                 _ => {}
             }
         }
 
-        let mut iter = words.iter()
-                            .flat_map(|arg| if arg.starts_with("-Wl,") {
-                                 arg[4..].split(',').collect()
-                             } else {
-                                 vec![arg.as_ref()]
-                             });
+        let mut iter = words.iter().flat_map(|arg| {
+            if arg.starts_with("-Wl,") {
+                arg[4..].split(',').collect()
+            } else {
+                vec![arg.as_ref()]
+            }
+        });
         while let Some(part) = iter.next() {
             if part != "-framework" {
-                continue
+                continue;
             }
             if let Some(lib) = iter.next() {
                 let meta = format!("rustc-link-lib=framework={}", lib);
@@ -566,9 +575,10 @@ impl Library {
 }
 
 fn envify(name: &str) -> String {
-    name.chars().map(|c| c.to_ascii_uppercase()).map(|c| {
-        if c == '-' {'_'} else {c}
-    }).collect()
+    name.chars()
+        .map(|c| c.to_ascii_uppercase())
+        .map(|c| if c == '-' { '_' } else { c })
+        .collect()
 }
 
 /// System libraries should only be linked dynamically
@@ -581,8 +591,7 @@ fn is_static_available(name: &str, dirs: &[PathBuf]) -> bool {
     };
 
     dirs.iter().any(|dir| {
-        !system_roots.iter().any(|sys| dir.starts_with(sys)) &&
-        dir.join(&libname).exists()
+        !system_roots.iter().any(|sys| dir.starts_with(sys)) && dir.join(&libname).exists()
     })
 }
 
@@ -623,9 +632,7 @@ fn split_flags(output: &[u8]) -> Vec<String> {
                 escaped = false;
                 word.push(b);
             }
-            b'\\' => {
-                escaped = true
-            }
+            b'\\' => escaped = true,
             b'\t' | b'\n' | b'\r' | b' ' => {
                 if !word.is_empty() {
                     words.push(String::from_utf8(word).unwrap());
@@ -646,19 +653,38 @@ fn split_flags(output: &[u8]) -> Vec<String> {
 #[test]
 #[cfg(target_os = "macos")]
 fn system_library_mac_test() {
-    assert!(!is_static_available("PluginManager", &[PathBuf::from("/Library/Frameworks")]));
-    assert!(!is_static_available("python2.7", &[PathBuf::from("/System/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/config")]));
-    assert!(!is_static_available("ffi_convenience", &[PathBuf::from("/Library/Ruby/Gems/2.0.0/gems/ffi-1.9.10/ext/ffi_c/libffi-x86_64/.libs")]));
+    assert!(!is_static_available(
+        "PluginManager",
+        &[PathBuf::from("/Library/Frameworks")]
+    ));
+    assert!(!is_static_available(
+        "python2.7",
+        &[PathBuf::from(
+            "/System/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/config"
+        )]
+    ));
+    assert!(!is_static_available(
+        "ffi_convenience",
+        &[PathBuf::from(
+            "/Library/Ruby/Gems/2.0.0/gems/ffi-1.9.10/ext/ffi_c/libffi-x86_64/.libs"
+        )]
+    ));
 
     // Homebrew is in /usr/local, and it's not a part of the OS
     if Path::new("/usr/local/lib/libpng16.a").exists() {
-        assert!(is_static_available("png16", &[PathBuf::from("/usr/local/lib")]));
+        assert!(is_static_available(
+            "png16",
+            &[PathBuf::from("/usr/local/lib")]
+        ));
     }
 }
 
 #[test]
 #[cfg(target_os = "linux")]
 fn system_library_linux_test() {
-    assert!(!is_static_available("util", &[PathBuf::from("/usr/lib/x86_64-linux-gnu")]));
+    assert!(!is_static_available(
+        "util",
+        &[PathBuf::from("/usr/lib/x86_64-linux-gnu")]
+    ));
     assert!(!is_static_available("dialog", &[PathBuf::from("/usr/lib")]));
 }
