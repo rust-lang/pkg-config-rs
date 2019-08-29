@@ -4,8 +4,8 @@ extern crate lazy_static;
 
 use pkg_config::Error;
 use std::env;
-use std::sync::Mutex;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 lazy_static! {
     static ref LOCK: Mutex<()> = Mutex::new(());
@@ -13,17 +13,21 @@ lazy_static! {
 
 fn reset() {
     for (k, _) in env::vars() {
-        if k.contains("DYNAMIC") ||
-           k.contains("STATIC") ||
-           k.contains("PKG_CONFIG_ALLOW_CROSS") ||
-           k.contains("PKG_CONFIG_SYSROOT_DIR") ||
-           k.contains("FOO_NO_PKG_CONFIG") {
+        if k.contains("DYNAMIC")
+            || k.contains("STATIC")
+            || k.contains("PKG_CONFIG_ALLOW_CROSS")
+            || k.contains("PKG_CONFIG_SYSROOT_DIR")
+            || k.contains("FOO_NO_PKG_CONFIG")
+        {
             env::remove_var(&k);
         }
     }
     env::remove_var("TARGET");
     env::remove_var("HOST");
-    env::set_var("PKG_CONFIG_PATH", &env::current_dir().unwrap().join("tests"));
+    env::set_var(
+        "PKG_CONFIG_PATH",
+        &env::current_dir().unwrap().join("tests"),
+    );
 }
 
 fn find(name: &str) -> Result<pkg_config::Library, Error> {
@@ -37,7 +41,7 @@ fn cross_disabled() {
     env::set_var("TARGET", "foo");
     env::set_var("HOST", "bar");
     match find("foo") {
-        Err(Error::CrossCompilation) => {},
+        Err(Error::CrossCompilation) => {}
         x => panic!("Error::CrossCompilation expected, found `{:?}`", x),
     }
 }
@@ -71,7 +75,7 @@ fn cross_disabled_if_customized() {
     env::set_var("PKG_CONFIG_ALLOW_CROSS", "0");
     env::set_var("PKG_CONFIG_SYSROOT_DIR", "/tmp/cross-test");
     match find("foo") {
-        Err(Error::CrossCompilation) => {},
+        Err(Error::CrossCompilation) => {}
         _ => panic!("expected CrossCompilation failure"),
     }
 }
@@ -82,9 +86,7 @@ fn package_disabled() {
     reset();
     env::set_var("FOO_NO_PKG_CONFIG", "1");
     match find("foo") {
-        Err(Error::EnvNoPkgConfig(name)) => {
-            assert_eq!(name, "FOO_NO_PKG_CONFIG")
-        }
+        Err(Error::EnvNoPkgConfig(name)) => assert_eq!(name, "FOO_NO_PKG_CONFIG"),
         x => panic!("Error::EnvNoPkgConfig expected, found `{:?}`", x),
     }
 }
@@ -104,14 +106,21 @@ fn escapes() {
     let _g = LOCK.lock();
     reset();
     let lib = find("escape").unwrap();
-    assert!(lib.include_paths.contains(&PathBuf::from("include path with spaces")));
-    assert!(lib.link_paths.contains(&PathBuf::from("link path with spaces")));
-    assert_eq!(lib.defines.get("A"),
-               Some(&Some("\"escaped string' literal\"".to_owned())));
-    assert_eq!(lib.defines.get("B"),
-               Some(&Some("ESCAPED IDENTIFIER".to_owned())));
-    assert_eq!(lib.defines.get("FOX"),
-               Some(&Some("🦊".to_owned())));
+    assert!(lib
+        .include_paths
+        .contains(&PathBuf::from("include path with spaces")));
+    assert!(lib
+        .link_paths
+        .contains(&PathBuf::from("link path with spaces")));
+    assert_eq!(
+        lib.defines.get("A"),
+        Some(&Some("\"escaped string' literal\"".to_owned()))
+    );
+    assert_eq!(
+        lib.defines.get("B"),
+        Some(&Some("ESCAPED IDENTIFIER".to_owned()))
+    );
+    assert_eq!(lib.defines.get("FOX"), Some(&Some("🦊".to_owned())));
 }
 
 #[test]
@@ -146,7 +155,10 @@ fn version() {
 fn atleast_version_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().atleast_version("3.10").probe("foo").unwrap();
+    pkg_config::Config::new()
+        .atleast_version("3.10")
+        .probe("foo")
+        .unwrap();
 }
 
 #[test]
@@ -154,14 +166,20 @@ fn atleast_version_ok() {
 fn atleast_version_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().atleast_version("3.11").probe("foo").unwrap();
+    pkg_config::Config::new()
+        .atleast_version("3.11")
+        .probe("foo")
+        .unwrap();
 }
 
 #[test]
 fn exactly_version_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().exactly_version("3.10.0.SVN").probe("foo").unwrap();
+    pkg_config::Config::new()
+        .exactly_version("3.10.0.SVN")
+        .probe("foo")
+        .unwrap();
 }
 
 #[test]
@@ -169,14 +187,20 @@ fn exactly_version_ok() {
 fn exactly_version_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().exactly_version("3.10.0").probe("foo").unwrap();
+    pkg_config::Config::new()
+        .exactly_version("3.10.0")
+        .probe("foo")
+        .unwrap();
 }
 
 #[test]
 fn range_version_range_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version("4.2.0".."4.4.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version("4.2.0".."4.4.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
@@ -184,14 +208,20 @@ fn range_version_range_ok() {
 fn range_version_range_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version("4.0.0".."4.2.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version("4.0.0".."4.2.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
 fn range_version_range_inclusive_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version("4.0.0"..="4.2.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version("4.0.0"..="4.2.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
@@ -199,14 +229,20 @@ fn range_version_range_inclusive_ok() {
 fn range_version_range_inclusive_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version("3.8.0"..="4.0.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version("3.8.0"..="4.0.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
 fn range_version_range_from_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version("4.0.0"..).probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version("4.0.0"..)
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
@@ -214,14 +250,20 @@ fn range_version_range_from_ok() {
 fn range_version_range_from_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version("4.4.0"..).probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version("4.4.0"..)
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
 fn range_version_range_to_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version(.."4.4.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version(.."4.4.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
@@ -229,14 +271,20 @@ fn range_version_range_to_ok() {
 fn range_version_range_to_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version(.."4.2.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version(.."4.2.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
 fn range_version_range_to_inclusive_ok() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version(..="4.2.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version(..="4.2.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
@@ -244,12 +292,18 @@ fn range_version_range_to_inclusive_ok() {
 fn range_version_range_to_inclusive_ng() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version(..="4.0.0").probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version(..="4.0.0")
+        .probe("escape")
+        .unwrap();
 }
 
 #[test]
 fn range_version_full() {
     let _g = LOCK.lock();
     reset();
-    pkg_config::Config::new().range_version(..).probe("escape").unwrap();
+    pkg_config::Config::new()
+        .range_version(..)
+        .probe("escape")
+        .unwrap();
 }
