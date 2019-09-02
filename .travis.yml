@@ -16,6 +16,7 @@ matrix:
         on:
           branch: master
 script:
+  - cargo fmt --all -- --check
   - cargo build --verbose
   - cargo test --verbose
 notifications:
