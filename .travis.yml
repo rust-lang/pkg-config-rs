@@ -3,6 +3,7 @@ matrix:
   include:
     - rust: 1.28.0
     - rust: stable
+      env: RUST_STABLE=1
     - rust: beta
     - rust: nightly
     - name: "master doc to gh-pages"
@@ -19,7 +20,7 @@ matrix:
 before_script:
   - rustup component add rustfmt-preview
 script:
-  - cargo fmt --all -- --check
+  - [ "$RUST_STABLE" = 1 ] && cargo fmt --all -- --check || test 1
   - cargo build --verbose
   - cargo test --verbose
 notifications:
