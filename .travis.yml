@@ -15,6 +15,9 @@ matrix:
         skip_cleanup: true
         on:
           branch: master
+
+before_script:
+  - rustup component add rustfmt-preview
 script:
   - cargo fmt --all -- --check
   - cargo build --verbose
