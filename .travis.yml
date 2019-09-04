@@ -1,7 +1,7 @@
 language: rust
 matrix:
   include:
-    - rust: 1.28.0
+    - rust: 1.30.0
     - rust: stable
       env: RUST_STABLE=1
     - rust: beta
