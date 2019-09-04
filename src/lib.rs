@@ -530,7 +530,7 @@ impl Library {
                     self.libs.push(val.to_string());
                 }
                 "-D" => {
-                    let mut iter = val.split("=");
+                    let mut iter = val.split('=');
                     self.defines.insert(
                         iter.next().unwrap().to_owned(),
                         iter.next().map(|s| s.to_owned()),
@@ -593,13 +593,13 @@ fn run(mut cmd: Command) -> Result<Vec<u8>, Error> {
             } else {
                 Err(Error::Failure {
                     command: format!("{:?}", cmd),
-                    output: output,
+                    output,
                 })
             }
         }
         Err(cause) => Err(Error::Command {
             command: format!("{:?}", cmd),
-            cause: cause,
+            cause,
         }),
     }
 }
