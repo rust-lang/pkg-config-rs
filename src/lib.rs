@@ -63,9 +63,6 @@
 
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 
-#[allow(unused_imports)] // Required for Rust <1.23
-#[allow(deprecated)]
-use std::ascii::AsciiExt;
 use std::collections::HashMap;
 use std::env;
 use std::error;
@@ -142,7 +139,7 @@ impl error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::Command { ref cause, .. } => Some(cause),
             _ => None,
@@ -204,7 +201,7 @@ pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
     let cfg = Config::new();
     let out = run(cfg.command(package, &[&arg]))?;
-    Ok(str::from_utf8(&out).unwrap().trim_right().to_owned())
+    Ok(str::from_utf8(&out).unwrap().trim_end().to_owned())
 }
 
 impl Config {
@@ -533,7 +530,7 @@ impl Library {
                     self.libs.push(val.to_string());
                 }
                 "-D" => {
-                    let mut iter = val.split("=");
+                    let mut iter = val.split('=');
                     self.defines.insert(
                         iter.next().unwrap().to_owned(),
                         iter.next().map(|s| s.to_owned()),
@@ -596,13 +593,13 @@ fn run(mut cmd: Command) -> Result<Vec<u8>, Error> {
             } else {
                 Err(Error::Failure {
                     command: format!("{:?}", cmd),
-                    output: output,
+                    output,
                 })
             }
         }
         Err(cause) => Err(Error::Command {
             command: format!("{:?}", cmd),
-            cause: cause,
+            cause,
         }),
     }
 }
