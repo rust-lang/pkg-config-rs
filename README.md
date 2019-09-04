@@ -1,7 +1,7 @@
 # pkg-config-rs
 
 [![Build Status](https://travis-ci.com/rust-lang/pkg-config-rs.svg?branch=master)](https://travis-ci.com/rust-lang/pkg-config-rs)
-[![Rust](https://img.shields.io/badge/rust-1.28%2B-blue.svg?maxAge=3600)](https://github.com/alexcrichton/pkg-config-rs/)
+[![Rust](https://img.shields.io/badge/rust-1.28%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/pkg-config-rs/)
 
 [Documentation](https://docs.rs/pkg-config)
 
