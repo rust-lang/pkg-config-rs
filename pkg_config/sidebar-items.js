@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Error","Represents all reasons `pkg-config` might not succeed or be run at all."]],"fn":[["get_variable","Run `pkg-config` to get the value of a variable from a package using --variable."],["probe_library","Simple shortcut for using all default options for finding a library."]],"struct":[["Config",""],["Library",""]]});
