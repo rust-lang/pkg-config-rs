@@ -20,7 +20,10 @@ matrix:
 before_script:
   - rustup component add rustfmt-preview
 script:
-  - [ "$RUST_STABLE" = 1 ] && cargo fmt --all -- --check || test 1
+  - |
+    if [ "$RUST_STABLE" = 1 ]; then
+      cargo fmt --all -- --check
+    fi
   - cargo build --verbose
   - cargo test --verbose
 notifications:
