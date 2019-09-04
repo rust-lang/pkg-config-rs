@@ -74,7 +74,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::str;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Config {
     statik: Option<bool>,
     min_version: Bound<String>,
@@ -85,7 +85,7 @@ pub struct Config {
     print_system_libs: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Library {
     pub libs: Vec<String>,
     pub link_paths: Vec<PathBuf>,
