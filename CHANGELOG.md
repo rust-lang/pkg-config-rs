@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [0.3.16] - 2019-09-09
+
+### Changed
+- Stop using deprecated functions and require Rust 1.30 (#84)
+
+### Fixed
+- Fix repository URL in README.md
+- Fix various clippy warnings
+
+### Added
+- Run `cargo fmt` as part of the CI (#89)
+- Derive `Clone` for `Library` and `Debug` for `Config (#91)
+- Add support for `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS` and enable by default (#93)
+
 ## [0.3.15] - 2019-07-25
 
 ### Changed
