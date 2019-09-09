@@ -83,6 +83,7 @@ pub struct Config {
     cargo_metadata: bool,
     env_metadata: bool,
     print_system_libs: bool,
+    print_system_cflags: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -213,6 +214,7 @@ impl Config {
             min_version: Bound::Unbounded,
             max_version: Bound::Unbounded,
             extra_args: vec![],
+            print_system_cflags: true,
             print_system_libs: true,
             cargo_metadata: true,
             env_metadata: false,
@@ -289,6 +291,15 @@ impl Config {
     /// This env var is enabled by default.
     pub fn print_system_libs(&mut self, print: bool) -> &mut Config {
         self.print_system_libs = print;
+        self
+    }
+
+    /// Enable or disable the `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS` environment
+    /// variable.
+    ///
+    /// This env var is enabled by default.
+    pub fn print_system_cflags(&mut self, print: bool) -> &mut Config {
+        self.print_system_cflags = print;
         self
     }
 
@@ -407,6 +418,9 @@ impl Config {
         if self.print_system_libs {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1");
         }
+        if self.print_system_cflags {
+            cmd.env("PKG_CONFIG_ALLOW_SYSTEM_CFLAGS", "1");
+        }
         cmd.arg(name);
         match self.min_version {
             Bound::Included(ref version) => {
@@ -459,6 +473,7 @@ impl Default for Config {
             min_version: Bound::Unbounded,
             max_version: Bound::Unbounded,
             extra_args: vec![],
+            print_system_cflags: false,
             print_system_libs: false,
             cargo_metadata: false,
             env_metadata: false,
