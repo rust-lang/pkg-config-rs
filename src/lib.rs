@@ -575,7 +575,7 @@ impl Library {
     }
 
     fn parse_modversion(&mut self, output: &str) {
-        self.version.push_str(output.trim());
+        self.version.push_str(output.lines().nth(0).unwrap().trim());
     }
 }
 
@@ -681,6 +681,12 @@ fn system_library_mac_test() {
             "png16",
             &[PathBuf::from("/usr/local/lib")]
         ));
+
+        let libpng = Config::new()
+            .range_version("1".."99")
+            .probe("libpng16")
+            .unwrap();
+        assert!(libpng.version.find('\n').is_none());
     }
 }
 
