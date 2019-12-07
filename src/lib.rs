@@ -121,6 +121,9 @@ pub enum Error {
     /// Contains the command and output.
     Failure { command: String, output: Output },
 
+    /// `pkg-config` finds libpackage.a for MSVC instead of package.lib
+    MsvcMingwMismatch,
+
     #[doc(hidden)]
     // please don't match on this, we're likely to add more variants over time
     __Nonexhaustive,
@@ -136,6 +139,7 @@ impl error::Error for Error {
             }
             Error::Command { .. } => "failed to run pkg-config",
             Error::Failure { .. } => "pkg-config did not exit sucessfully",
+            Error::MsvcMingwMismatch { .. } => "found incompatible mingw library for msvc target",
             Error::__Nonexhaustive => panic!(),
         }
     }
@@ -179,6 +183,9 @@ impl fmt::Display for Error {
                     write!(f, "\n--- stderr\n{}", stderr)?;
                 }
                 Ok(())
+            }
+            Error::MsvcMingwMismatch => {
+                write!(f, "Found incompatible mingw library for msvc target")
             }
             Error::__Nonexhaustive => panic!(),
         }
@@ -328,6 +335,21 @@ impl Config {
 
         let output = run(self.command(name, &["--modversion"]))?;
         library.parse_modversion(str::from_utf8(&output).unwrap());
+
+        if let Ok(target) = env::var("TARGET") {
+            if target.contains("msvc") {
+                for lib in &library.libs {
+                    let libname = format!("{}.lib", lib);
+                    if library
+                        .link_paths
+                        .iter()
+                        .all(|dir| !dir.join(&libname).exists())
+                    {
+                        return Err(Error::MsvcMingwMismatch);
+                    }
+                }
+            }
+        }
 
         Ok(library)
     }
