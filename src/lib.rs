@@ -126,27 +126,7 @@ pub enum Error {
     __Nonexhaustive,
 }
 
-impl error::Error for Error {
-    fn description(&self) -> &str {
-        match *self {
-            Error::EnvNoPkgConfig(_) => "pkg-config requested to be aborted",
-            Error::CrossCompilation => {
-                "pkg-config doesn't handle cross compilation. \
-                 Use PKG_CONFIG_ALLOW_CROSS=1 to override"
-            }
-            Error::Command { .. } => "failed to run pkg-config",
-            Error::Failure { .. } => "pkg-config did not exit sucessfully",
-            Error::__Nonexhaustive => panic!(),
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn error::Error> {
-        match *self {
-            Error::Command { ref cause, .. } => Some(cause),
-            _ => None,
-        }
-    }
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
