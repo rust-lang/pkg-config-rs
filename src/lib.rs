@@ -197,7 +197,7 @@ impl Config {
             print_system_cflags: true,
             print_system_libs: true,
             cargo_metadata: true,
-            env_metadata: false,
+            env_metadata: true,
         }
     }
 
@@ -259,7 +259,7 @@ impl Config {
 
     /// Define whether metadata should be emitted for cargo allowing to
     /// automatically rebuild when environment variables change. Defaults to
-    /// `false`.
+    /// `true`.
     pub fn env_metadata(&mut self, env_metadata: bool) -> &mut Config {
         self.env_metadata = env_metadata;
         self
