@@ -313,8 +313,8 @@ impl Config {
     }
 
     pub fn target_supported(&self) -> bool {
-        let target = env::var("TARGET").unwrap_or_default();
-        let host = env::var("HOST").unwrap_or_default();
+        let target = env::var_os("TARGET").unwrap_or_default();
+        let host = env::var_os("HOST").unwrap_or_default();
 
         // Only use pkg-config in host == target situations by default (allowing an
         // override).
@@ -326,13 +326,13 @@ impl Config {
         // a wrapper script that sets up platform-specific prefixes.
         match self.targetted_env_var("PKG_CONFIG_ALLOW_CROSS") {
             // don't use pkg-config if explicitly disabled
-            Ok(ref val) if val == "0" => false,
-            Ok(_) => true,
-            Err(_) => {
+            Some(ref val) if val == "0" => false,
+            Some(_) => true,
+            None => {
                 // if not disabled, and pkg-config is customized,
                 // then assume it's prepared for cross-compilation
-                self.targetted_env_var("PKG_CONFIG").is_ok()
-                    || self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR").is_ok()
+                self.targetted_env_var("PKG_CONFIG").is_some()
+                    || self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR").is_some()
             }
         }
     }
@@ -343,26 +343,27 @@ impl Config {
         get_variable(package, variable).map_err(|e| e.to_string())
     }
 
-    fn targetted_env_var(&self, var_base: &str) -> Result<String, env::VarError> {
-        if let Ok(target) = env::var("TARGET") {
-            let host = env::var("HOST")?;
-            let kind = if host == target { "HOST" } else { "TARGET" };
-            let target_u = target.replace("-", "_");
+    fn targetted_env_var(&self, var_base: &str) -> Option<OsString> {
+        match (env::var("TARGET"), env::var("HOST")) {
+            (Ok(target), Ok(host)) => {
+                let kind = if host == target { "HOST" } else { "TARGET" };
+                let target_u = target.replace("-", "_");
 
-            self.env_var(&format!("{}_{}", var_base, target))
-                .or_else(|_| self.env_var(&format!("{}_{}", var_base, target_u)))
-                .or_else(|_| self.env_var(&format!("{}_{}", kind, var_base)))
-                .or_else(|_| self.env_var(var_base))
-        } else {
-            self.env_var(var_base)
+                self.env_var_os(&format!("{}_{}", var_base, target))
+                    .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
+                    .or_else(|| self.env_var_os(&format!("{}_{}", kind, var_base)))
+                    .or_else(|| self.env_var_os(var_base))
+            }
+            (Err(env::VarError::NotPresent), _) | (_, Err(env::VarError::NotPresent)) => {
+                self.env_var_os(var_base)
+            }
+            (Err(env::VarError::NotUnicode(s)), _) | (_, Err(env::VarError::NotUnicode(s))) => {
+                panic!(
+                    "HOST or TARGET environment variable is not valid unicode: {:?}",
+                    s
+                )
+            }
         }
-    }
-
-    fn env_var(&self, name: &str) -> Result<String, env::VarError> {
-        if self.env_metadata {
-            println!("cargo:rerun-if-env-changed={}", name);
-        }
-        env::var(name)
     }
 
     fn env_var_os(&self, name: &str) -> Option<OsString> {
@@ -378,21 +379,21 @@ impl Config {
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
         let exe = self
-            .env_var("PKG_CONFIG")
-            .unwrap_or_else(|_| String::from("pkg-config"));
+            .env_var_os("PKG_CONFIG")
+            .unwrap_or_else(|| OsString::from("pkg-config"));
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
         }
         cmd.args(args).args(&self.extra_args);
 
-        if let Ok(value) = self.targetted_env_var("PKG_CONFIG_PATH") {
+        if let Some(value) = self.targetted_env_var("PKG_CONFIG_PATH") {
             cmd.env("PKG_CONFIG_PATH", value);
         }
-        if let Ok(value) = self.targetted_env_var("PKG_CONFIG_LIBDIR") {
+        if let Some(value) = self.targetted_env_var("PKG_CONFIG_LIBDIR") {
             cmd.env("PKG_CONFIG_LIBDIR", value);
         }
-        if let Ok(value) = self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR") {
+        if let Some(value) = self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR") {
             cmd.env("PKG_CONFIG_SYSROOT_DIR", value);
         }
         if self.print_system_libs {
