@@ -313,8 +313,8 @@ impl Config {
     }
 
     pub fn target_supported(&self) -> bool {
-        let target = env::var("TARGET").unwrap_or_default();
-        let host = env::var("HOST").unwrap_or_default();
+        let target = env::var_os("TARGET").unwrap_or_default();
+        let host = env::var_os("HOST").unwrap_or_default();
 
         // Only use pkg-config in host == target situations by default (allowing an
         // override).
@@ -344,19 +344,25 @@ impl Config {
     }
 
     fn targetted_env_var(&self, var_base: &str) -> Option<OsString> {
-        // Typically both `TARGET` and `HOST` will be valid utf-8, so we implicitly ignore the
-        // possiblity of them having that failure mode.
-        if let Ok(target) = env::var("TARGET") {
-            let host = env::var("HOST").ok()?;
-            let kind = if host == target { "HOST" } else { "TARGET" };
-            let target_u = target.replace("-", "_");
+        match (env::var("TARGET"), env::var("HOST")) {
+            (Ok(target), Ok(host)) => {
+                let kind = if host == target { "HOST" } else { "TARGET" };
+                let target_u = target.replace("-", "_");
 
-            self.env_var_os(&format!("{}_{}", var_base, target))
-                .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
-                .or_else(|| self.env_var_os(&format!("{}_{}", kind, var_base)))
-                .or_else(|| self.env_var_os(var_base))
-        } else {
-            self.env_var_os(var_base)
+                self.env_var_os(&format!("{}_{}", var_base, target))
+                    .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
+                    .or_else(|| self.env_var_os(&format!("{}_{}", kind, var_base)))
+                    .or_else(|| self.env_var_os(var_base))
+            }
+            (Err(env::VarError::NotPresent), _) | (_, Err(env::VarError::NotPresent)) => {
+                self.env_var_os(var_base)
+            }
+            (Err(env::VarError::NotUnicode(s)), _) | (_, Err(env::VarError::NotUnicode(s))) => {
+                panic!(
+                    "HOST or TARGET environment variable is not valid unicode: {:?}",
+                    s
+                )
+            }
         }
     }
 
