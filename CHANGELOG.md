@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [0.3.18] - 2020-07-11
+
+### Fixed
+
+- Use `env::var_os()` almost everywhere to handle non-UTF8 paths in
+  environment variables, and also improve error handling around environment
+  variable handling (#106).
+
+### Changed
+
+- Default the `env_metadata` build parameter to `true` instead of `false`.
+  Whenever a pkg-config related environment variable changes it would make
+  sense to rebuild crates that use pkg-config, or otherwise changes might not
+  be picked up. As such the previous default didn't make much sense (#105).
+
 ## [0.3.17] - 2019-11-02
 
 ### Fixed
