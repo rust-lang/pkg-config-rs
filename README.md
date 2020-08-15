@@ -40,7 +40,7 @@ fn main() {
 
 # External configuration via target-scoped environment variables
 
-In cross-compilation context, it is useful to manage separately PKG_CONFIG_PATH
+In cross-compilation context, it is useful to manage separately `PKG_CONFIG_PATH`
 and a few other variables for the `host` and the `target` platform.
 
 The supported variables are: `PKG_CONFIG_PATH`, `PKG_CONFIG_LIBDIR`, and
@@ -53,7 +53,13 @@ Each of these variables can also be supplied with certain prefixes and suffixes,
 3. `<build-kind>_<var>` - for example, `HOST_PKG_CONFIG_PATH` or `TARGET_PKG_CONFIG_PATH`
 4. `<var>` - a plain `PKG_CONFIG_PATH`
 
-Also note that `PKG_CONFIG_ALLOW_CROSS` must always be set in cross-compilation context.
+This crate will allow `pkg-config` to be used in cross-compilation
+if `PKG_CONFIG_SYSROOT_DIR` or `PKG_CONFIG` is set. You can set `PKG_CONFIG_ALLOW_CROSS=1`
+to bypass the compatibility check, but please note that enabling use of `pkg-config` in
+cross-compilation without appropriate sysroot and search paths set is likely to break builds.
+
+Some Rust sys crates support building vendored libraries from source, which may be a work
+around for lack of cross-compilation support in `pkg-config`.
 
 # License
 
