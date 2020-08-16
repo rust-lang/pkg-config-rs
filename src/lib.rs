@@ -9,10 +9,15 @@
 //! A number of environment variables are available to globally configure how
 //! this crate will invoke `pkg-config`:
 //!
-//! * `PKG_CONFIG_ALLOW_CROSS` - if this variable is not set, then `pkg-config`
-//!   will automatically be disabled for all cross compiles.
 //! * `FOO_NO_PKG_CONFIG` - if set, this will disable running `pkg-config` when
 //!   probing for the library named `foo`.
+//!
+//! * `PKG_CONFIG_ALLOW_CROSS` - The `pkg-config` command usually doesn't
+//!   support cross-compilation, and this crate prevents it from selecting
+//!   incompatible versions of libraries.
+//!   Setting `PKG_CONFIG_ALLOW_CROSS=1` disables this protection, which is
+//!   likely to cause linking errors, unless `pkg-config` has been configured
+//!   to use appropriate sysroot and search paths for the target platform.
 //!
 //! There are also a number of environment variables which can configure how a
 //! library is linked to (dynamically vs statically). These variables control
@@ -106,9 +111,11 @@ pub enum Error {
     /// Contains the name of the responsible environment variable.
     EnvNoPkgConfig(String),
 
-    /// Cross compilation detected.
+    /// Detected cross compilation without a custom sysroot.
     ///
-    /// Override with `PKG_CONFIG_ALLOW_CROSS=1`.
+    /// Ignore the error with `PKG_CONFIG_ALLOW_CROSS=1`,
+    /// which may let `pkg-config` select libraries
+    /// for the host's architecture instead of the target's.
     CrossCompilation,
 
     /// Failed to run `pkg-config`.
@@ -132,10 +139,13 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Error::EnvNoPkgConfig(ref name) => write!(f, "Aborted because {} is set", name),
-            Error::CrossCompilation => write!(
-                f,
-                "Cross compilation detected. \
-                 Use PKG_CONFIG_ALLOW_CROSS=1 to override"
+            Error::CrossCompilation => f.write_str(
+                "pkg-config has not been configured to support cross-compilation.
+
+                Install a sysroot for the target platform and configure it via
+                PKG_CONFIG_SYSROOT_DIR and PKG_CONFIG_PATH, or install a
+                cross-compiling wrapper for pkg-config and set it via
+                PKG_CONFIG environment variable."
             ),
             Error::Command {
                 ref command,
@@ -177,7 +187,12 @@ pub fn probe_library(name: &str) -> Result<Library, Error> {
 }
 
 /// Run `pkg-config` to get the value of a variable from a package using
-/// --variable.
+/// `--variable`.
+///
+/// The content of `PKG_CONFIG_SYSROOT_DIR` is not injected in paths that are
+/// returned by `pkg-config --variable`, which makes them unsuitable to use
+/// during cross-compilation unless specifically designed to be used
+/// at that time.
 pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
     let cfg = Config::new();
