@@ -75,7 +75,7 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io;
 use std::ops::{Bound, RangeBounds};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::str;
 
@@ -145,7 +145,7 @@ impl fmt::Display for Error {
                 Install a sysroot for the target platform and configure it via
                 PKG_CONFIG_SYSROOT_DIR and PKG_CONFIG_PATH, or install a
                 cross-compiling wrapper for pkg-config and set it via
-                PKG_CONFIG environment variable."
+                PKG_CONFIG environment variable.",
             ),
             Error::Command {
                 ref command,
@@ -499,6 +499,25 @@ impl Library {
             }
         }
 
+        let system_roots = if cfg!(target_os = "macos") {
+            vec![PathBuf::from("/Library"), PathBuf::from("/System")]
+        } else {
+            let sysroot = config
+                .env_var_os("PKG_CONFIG_SYSROOT_DIR")
+                .or_else(|| config.env_var_os("SYSROOT"))
+                .map(PathBuf::from);
+
+            if cfg!(target_os = "windows") {
+                if let Some(sysroot) = sysroot {
+                    vec![sysroot]
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![sysroot.unwrap_or_else(|| PathBuf::from("/usr"))]
+            }
+        };
+
         let words = split_flags(output);
         let parts = words
             .iter()
@@ -530,7 +549,7 @@ impl Library {
                         continue;
                     }
 
-                    if statik && is_static_available(val, &dirs) {
+                    if statik && is_static_available(val, &system_roots, &dirs) {
                         let meta = format!("rustc-link-lib=static={}", val);
                         config.print_metadata(&meta);
                     } else {
@@ -583,13 +602,8 @@ fn envify(name: &str) -> String {
 }
 
 /// System libraries should only be linked dynamically
-fn is_static_available(name: &str, dirs: &[PathBuf]) -> bool {
+fn is_static_available(name: &str, system_roots: &[PathBuf], dirs: &[PathBuf]) -> bool {
     let libname = format!("lib{}.a", name);
-    let system_roots = if cfg!(target_os = "macos") {
-        vec![Path::new("/Library"), Path::new("/System")]
-    } else {
-        vec![Path::new("/usr")]
-    };
 
     dirs.iter().any(|dir| {
         !system_roots.iter().any(|sys| dir.starts_with(sys)) && dir.join(&libname).exists()
@@ -654,18 +668,23 @@ fn split_flags(output: &[u8]) -> Vec<String> {
 #[test]
 #[cfg(target_os = "macos")]
 fn system_library_mac_test() {
+    let system_roots = vec![PathBuf::from("/Library"), PathBuf::from("/System")];
+
     assert!(!is_static_available(
         "PluginManager",
+        system_roots,
         &[PathBuf::from("/Library/Frameworks")]
     ));
     assert!(!is_static_available(
         "python2.7",
+        system_roots,
         &[PathBuf::from(
             "/System/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/config"
         )]
     ));
     assert!(!is_static_available(
         "ffi_convenience",
+        system_roots,
         &[PathBuf::from(
             "/Library/Ruby/Gems/2.0.0/gems/ffi-1.9.10/ext/ffi_c/libffi-x86_64/.libs"
         )]
@@ -675,6 +694,7 @@ fn system_library_mac_test() {
     if Path::new("/usr/local/lib/libpng16.a").exists() {
         assert!(is_static_available(
             "png16",
+            system_roots,
             &[PathBuf::from("/usr/local/lib")]
         ));
 
@@ -691,7 +711,12 @@ fn system_library_mac_test() {
 fn system_library_linux_test() {
     assert!(!is_static_available(
         "util",
+        &[PathBuf::from("/usr")],
         &[PathBuf::from("/usr/lib/x86_64-linux-gnu")]
     ));
-    assert!(!is_static_available("dialog", &[PathBuf::from("/usr/lib")]));
+    assert!(!is_static_available(
+        "dialog",
+        &[PathBuf::from("/usr")],
+        &[PathBuf::from("/usr/lib")]
+    ));
 }
