@@ -505,9 +505,17 @@ impl Library {
             let sysroot = config
                 .env_var_os("PKG_CONFIG_SYSROOT_DIR")
                 .or_else(|| config.env_var_os("SYSROOT"))
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("/usr"));
-            vec![sysroot]
+                .map(PathBuf::from);
+
+            if cfg!(target_os = "windows") {
+                if let Some(sysroot) = sysroot {
+                    vec![sysroot]
+                } else {
+                    vec![]
+                }
+            } else {
+                vec![sysroot.unwrap_or_else(|| PathBuf::from("/usr"))]
+            }
         };
 
         let words = split_flags(output);
