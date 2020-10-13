@@ -527,9 +527,8 @@ impl Library {
         let parts = words
             .iter()
             .filter(|l| l.len() > 2)
-            .map(|arg| (&arg[0..2], &arg[2..]))
-            .collect::<Vec<_>>();
-        for &(flag, val) in &parts {
+            .map(|arg| (&arg[0..2], &arg[2..]));
+        for (flag, val) in parts {
             match flag {
                 "-L" => {
                     let meta = format!("rustc-link-search=native={}", val);
