@@ -518,15 +518,17 @@ impl Library {
             }
         };
 
+        let mut dirs = Vec::new();
+        let statik = config.is_static(name);
+
         let words = split_flags(output);
+
+        // Handle single-character arguments like `-I/usr/include`
         let parts = words
             .iter()
             .filter(|l| l.len() > 2)
             .map(|arg| (&arg[0..2], &arg[2..]))
             .collect::<Vec<_>>();
-
-        let mut dirs = Vec::new();
-        let statik = config.is_static(name);
         for &(flag, val) in &parts {
             match flag {
                 "-L" => {
@@ -570,6 +572,7 @@ impl Library {
             }
         }
 
+        // Handle multi-character arguments with space-separated value like `-framework foo`
         let mut iter = words.iter().flat_map(|arg| {
             if arg.starts_with("-Wl,") {
                 arg[4..].split(',').collect()
@@ -578,13 +581,20 @@ impl Library {
             }
         });
         while let Some(part) = iter.next() {
-            if part != "-framework" {
-                continue;
-            }
-            if let Some(lib) = iter.next() {
-                let meta = format!("rustc-link-lib=framework={}", lib);
-                config.print_metadata(&meta);
-                self.frameworks.push(lib.to_string());
+            match part {
+                "-framework" => {
+                    if let Some(lib) = iter.next() {
+                        let meta = format!("rustc-link-lib=framework={}", lib);
+                        config.print_metadata(&meta);
+                        self.frameworks.push(lib.to_string());
+                    }
+                }
+                "-isystem" | "-iquote" | "-idirafter" => {
+                    if let Some(inc) = iter.next() {
+                        self.include_paths.push(PathBuf::from(inc));
+                    }
+                }
+                _ => (),
             }
         }
     }

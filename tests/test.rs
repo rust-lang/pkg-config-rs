@@ -99,6 +99,10 @@ fn output_ok() {
     assert!(lib.libs.contains(&"gcc".to_string()));
     assert!(lib.libs.contains(&"coregrind-amd64-linux".to_string()));
     assert!(lib.link_paths.contains(&PathBuf::from("/usr/lib/valgrind")));
+    assert!(lib
+        .include_paths
+        .contains(&PathBuf::from("/usr/include/valgrind")));
+    assert!(lib.include_paths.contains(&PathBuf::from("/usr/foo")));
 }
 
 #[test]
