@@ -328,8 +328,8 @@ impl Config {
     }
 
     pub fn target_supported(&self) -> bool {
-        let target = env::var_os("TARGET").unwrap_or_default();
         let host = env::var_os("HOST").unwrap_or_default();
+        let target = env::var_os("TARGET").unwrap_or_else(|| host.clone());
 
         // Only use pkg-config in host == target situations by default (allowing an
         // override).

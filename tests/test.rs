@@ -47,6 +47,14 @@ fn cross_disabled() {
 }
 
 #[test]
+fn cross_disabled_missing_target() {
+    let _g = LOCK.lock();
+    reset();
+    env::set_var("HOST", "bar");
+    find("foo").unwrap();
+}
+
+#[test]
 fn cross_enabled() {
     let _g = LOCK.lock();
     reset();
