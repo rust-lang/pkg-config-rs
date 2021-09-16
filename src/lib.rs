@@ -394,7 +394,7 @@ impl Config {
 
     fn command(&self, name: &str, args: &[&str]) -> Command {
         let exe = self
-            .env_var_os("PKG_CONFIG")
+            .targetted_env_var("PKG_CONFIG")
             .unwrap_or_else(|| OsString::from("pkg-config"));
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
