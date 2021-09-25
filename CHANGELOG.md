@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.20] - 2021-09-25
+
+### Fixed
+
+- Use target-specific pkg-config consistently everywhere (#121, #118).
+
 ## [0.3.19] - 2020-10-13
 
 ### Added
