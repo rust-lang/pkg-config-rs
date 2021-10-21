@@ -156,7 +156,36 @@ impl fmt::Display for Error {
             Error::Command {
                 ref command,
                 ref cause,
-            } => write!(f, "Failed to run `{}`: {}", command, cause),
+            } => {
+                match cause.kind() {
+                    io::ErrorKind::NotFound => {
+                        let crate_name = std::env::var("CARGO_PKG_NAME");
+                        let crate_name = crate_name.as_deref().unwrap_or("sys");
+                        let instructions = if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
+                            "Try `brew install pkg-config` if you have Homebrew.\n"
+                        } else if cfg!(unix) {
+                            "Try `apt install pkg-config`, or `yum install pkg-config`,\n\
+                            or `pkg install pkg-config` depending on your distribution.\n"
+                        } else {
+                            "" // There's no easy fix for Windows users
+                        };
+                        write!(f, "Could not run `{command}`\n\
+                        The pkg-config command could not be found.\n\
+                        \n\
+                        Most likely, you need to install a pkg-config package for your OS.\n\
+                        {instructions}\
+                        \n\
+                        If you've already installed it, ensure the pkg-config command is one of the\n\
+                        directories in the PATH environment variable.\n\
+                        \n\
+                        If you did not expect this build to link to a pre-installed system library,\n\
+                        then check documentation of the {crate_name} crate for an option to\n\
+                        build the library from source, or disable features or dependencies\n\
+                        that require pkg-config.", command = command, instructions = instructions, crate_name = crate_name)
+                    }
+                    _ => write!(f, "Failed to run command `{}`, because: {}", command, cause),
+                }
+            }
             Error::Failure {
                 ref command,
                 ref output,
