@@ -104,7 +104,6 @@ pub struct Library {
 }
 
 /// Represents all reasons `pkg-config` might not succeed or be run at all.
-#[derive(Debug)]
 pub enum Error {
     /// Aborted because of `*_NO_PKG_CONFIG` environment variable.
     ///
@@ -134,6 +133,13 @@ pub enum Error {
 }
 
 impl error::Error for Error {}
+
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        // Failed `unwrap()` prints Debug representation, but the default debug format lacks helpful instructions for the end users
+        <Error as fmt::Display>::fmt(self, f)
+    }
+}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
