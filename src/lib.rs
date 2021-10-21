@@ -146,11 +146,11 @@ impl fmt::Display for Error {
         match *self {
             Error::EnvNoPkgConfig(ref name) => write!(f, "Aborted because {} is set", name),
             Error::CrossCompilation => f.write_str(
-                "pkg-config has not been configured to support cross-compilation.
-
-                Install a sysroot for the target platform and configure it via
-                PKG_CONFIG_SYSROOT_DIR and PKG_CONFIG_PATH, or install a
-                cross-compiling wrapper for pkg-config and set it via
+                "pkg-config has not been configured to support cross-compilation.\n\
+                \n\
+                Install a sysroot for the target platform and configure it via\n\
+                PKG_CONFIG_SYSROOT_DIR and PKG_CONFIG_PATH, or install a\n\
+                cross-compiling wrapper for pkg-config and set it via\n\
                 PKG_CONFIG environment variable.",
             ),
             Error::Command {
