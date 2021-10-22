@@ -677,23 +677,25 @@ fn split_flags(output: &[u8]) -> Vec<String> {
 #[test]
 #[cfg(target_os = "macos")]
 fn system_library_mac_test() {
+    use std::path::Path;
+
     let system_roots = vec![PathBuf::from("/Library"), PathBuf::from("/System")];
 
     assert!(!is_static_available(
         "PluginManager",
-        system_roots,
+        &system_roots,
         &[PathBuf::from("/Library/Frameworks")]
     ));
     assert!(!is_static_available(
         "python2.7",
-        system_roots,
+        &system_roots,
         &[PathBuf::from(
             "/System/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/config"
         )]
     ));
     assert!(!is_static_available(
         "ffi_convenience",
-        system_roots,
+        &system_roots,
         &[PathBuf::from(
             "/Library/Ruby/Gems/2.0.0/gems/ffi-1.9.10/ext/ffi_c/libffi-x86_64/.libs"
         )]
@@ -703,7 +705,7 @@ fn system_library_mac_test() {
     if Path::new("/usr/local/lib/libpng16.a").exists() {
         assert!(is_static_available(
             "png16",
-            system_roots,
+            &system_roots,
             &[PathBuf::from("/usr/local/lib")]
         ));
 
