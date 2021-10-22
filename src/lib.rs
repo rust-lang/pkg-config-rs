@@ -104,7 +104,6 @@ pub struct Library {
 }
 
 /// Represents all reasons `pkg-config` might not succeed or be run at all.
-#[derive(Debug)]
 pub enum Error {
     /// Aborted because of `*_NO_PKG_CONFIG` environment variable.
     ///
@@ -135,22 +134,58 @@ pub enum Error {
 
 impl error::Error for Error {}
 
+impl fmt::Debug for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        // Failed `unwrap()` prints Debug representation, but the default debug format lacks helpful instructions for the end users
+        <Error as fmt::Display>::fmt(self, f)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Error::EnvNoPkgConfig(ref name) => write!(f, "Aborted because {} is set", name),
             Error::CrossCompilation => f.write_str(
-                "pkg-config has not been configured to support cross-compilation.
-
-                Install a sysroot for the target platform and configure it via
-                PKG_CONFIG_SYSROOT_DIR and PKG_CONFIG_PATH, or install a
-                cross-compiling wrapper for pkg-config and set it via
+                "pkg-config has not been configured to support cross-compilation.\n\
+                \n\
+                Install a sysroot for the target platform and configure it via\n\
+                PKG_CONFIG_SYSROOT_DIR and PKG_CONFIG_PATH, or install a\n\
+                cross-compiling wrapper for pkg-config and set it via\n\
                 PKG_CONFIG environment variable.",
             ),
             Error::Command {
                 ref command,
                 ref cause,
-            } => write!(f, "Failed to run `{}`: {}", command, cause),
+            } => {
+                match cause.kind() {
+                    io::ErrorKind::NotFound => {
+                        let crate_name = std::env::var("CARGO_PKG_NAME");
+                        let crate_name = crate_name.as_deref().unwrap_or("sys");
+                        let instructions = if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
+                            "Try `brew install pkg-config` if you have Homebrew.\n"
+                        } else if cfg!(unix) {
+                            "Try `apt install pkg-config`, or `yum install pkg-config`,\n\
+                            or `pkg install pkg-config` depending on your distribution.\n"
+                        } else {
+                            "" // There's no easy fix for Windows users
+                        };
+                        write!(f, "Could not run `{command}`\n\
+                        The pkg-config command could not be found.\n\
+                        \n\
+                        Most likely, you need to install a pkg-config package for your OS.\n\
+                        {instructions}\
+                        \n\
+                        If you've already installed it, ensure the pkg-config command is one of the\n\
+                        directories in the PATH environment variable.\n\
+                        \n\
+                        If you did not expect this build to link to a pre-installed system library,\n\
+                        then check documentation of the {crate_name} crate for an option to\n\
+                        build the library from source, or disable features or dependencies\n\
+                        that require pkg-config.", command = command, instructions = instructions, crate_name = crate_name)
+                    }
+                    _ => write!(f, "Failed to run command `{}`, because: {}", command, cause),
+                }
+            }
             Error::Failure {
                 ref command,
                 ref output,
