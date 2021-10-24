@@ -10,7 +10,7 @@ order to use the system `pkg-config` tool (if available) to determine where a
 library is located.
 
 You can use this crate directly to probe for specific libraries, or use
-[metadeps](https://github.com/joshtriplett/metadeps) to declare all your
+[system-deps](https://github.com/gdesmott/system-deps) to declare all your
 `pkg-config` dependencies in `Cargo.toml`.
 
 This library requires Rust 1.30+.
