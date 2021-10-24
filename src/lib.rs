@@ -159,8 +159,8 @@ impl fmt::Display for Error {
             } => {
                 match cause.kind() {
                     io::ErrorKind::NotFound => {
-                        let crate_name = std::env::var("CARGO_PKG_NAME");
-                        let crate_name = crate_name.as_deref().unwrap_or("sys");
+                        let crate_name =
+                            std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "sys".to_owned());
                         let instructions = if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
                             "Try `brew install pkg-config` if you have Homebrew.\n"
                         } else if cfg!(unix) {
