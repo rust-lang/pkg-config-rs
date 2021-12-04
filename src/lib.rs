@@ -122,10 +122,19 @@ pub enum Error {
     /// Contains the command and the cause.
     Command { command: String, cause: io::Error },
 
-    /// `pkg-config` did not exit sucessfully.
+    /// `pkg-config` did not exit sucessfully after probing a library.
     ///
     /// Contains the command and output.
     Failure { command: String, output: Output },
+
+    /// `pkg-config` did not exit sucessfully on the first attempt to probe a library.
+    ///
+    /// Contains the command and output.
+    ProbeFailure {
+        name: String,
+        command: String,
+        output: Output,
+    },
 
     #[doc(hidden)]
     // please don't match on this, we're likely to add more variants over time
@@ -186,28 +195,44 @@ impl fmt::Display for Error {
                     _ => write!(f, "Failed to run command `{}`, because: {}", command, cause),
                 }
             }
+            Error::ProbeFailure {
+                ref name,
+                ref command,
+                ref output,
+            } => {
+                write!(
+                    f,
+                    "`{}` did not exit successfully: {}\nerror: could not find system library '{}' required by the '{}' crate\n",
+                    command, output.status, name, env::var("CARGO_PKG_NAME").unwrap_or_default(),
+                )?;
+                format_output(output, f)
+            }
             Error::Failure {
                 ref command,
                 ref output,
             } => {
-                let stdout = str::from_utf8(&output.stdout).unwrap();
-                let stderr = str::from_utf8(&output.stderr).unwrap();
                 write!(
                     f,
                     "`{}` did not exit successfully: {}",
                     command, output.status
                 )?;
-                if !stdout.is_empty() {
-                    write!(f, "\n--- stdout\n{}", stdout)?;
-                }
-                if !stderr.is_empty() {
-                    write!(f, "\n--- stderr\n{}", stderr)?;
-                }
-                Ok(())
+                format_output(output, f)
             }
             Error::__Nonexhaustive => panic!(),
         }
     }
+}
+
+fn format_output(output: &Output, f: &mut fmt::Formatter) -> fmt::Result {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !stdout.is_empty() {
+        write!(f, "\n--- stdout\n{}", stdout)?;
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if !stderr.is_empty() {
+        write!(f, "\n--- stderr\n{}", stderr)?;
+    }
+    Ok(())
 }
 
 /// Deprecated in favor of the probe_library function
@@ -353,7 +378,14 @@ impl Config {
 
         let mut library = Library::new();
 
-        let output = run(self.command(name, &["--libs", "--cflags"]))?;
+        let output = run(self.command(name, &["--libs", "--cflags"])).map_err(|e| match e {
+            Error::Failure { command, output } => Error::ProbeFailure {
+                name: name.to_owned(),
+                command,
+                output,
+            },
+            other => other,
+        })?;
         library.parse_libs_cflags(name, &output, self);
 
         let output = run(self.command(name, &["--modversion"]))?;
