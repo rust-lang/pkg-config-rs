@@ -98,6 +98,7 @@ pub struct Library {
     pub frameworks: Vec<String>,
     pub framework_paths: Vec<PathBuf>,
     pub include_paths: Vec<PathBuf>,
+    pub rpaths: Vec<PathBuf>,
     pub defines: HashMap<String, Option<String>>,
     pub version: String,
     _priv: (),
@@ -557,6 +558,7 @@ impl Library {
             libs: Vec::new(),
             link_paths: Vec::new(),
             include_paths: Vec::new(),
+            rpaths: Vec::new(),
             frameworks: Vec::new(),
             framework_paths: Vec::new(),
             defines: HashMap::new(),
@@ -665,6 +667,13 @@ impl Library {
                 "-isystem" | "-iquote" | "-idirafter" => {
                     if let Some(inc) = iter.next() {
                         self.include_paths.push(PathBuf::from(inc));
+                    }
+                }
+                "-rpath" => {
+                    if let Some(rpath) = iter.next() {
+                        let meta = format!("rustc-link-arg=-Wl,-rpath,{}", rpath);
+                        config.print_metadata(&meta);
+                        self.rpaths.push(PathBuf::from(rpath));
                     }
                 }
                 _ => (),
