@@ -98,7 +98,7 @@ pub struct Library {
     pub frameworks: Vec<String>,
     pub framework_paths: Vec<PathBuf>,
     pub include_paths: Vec<PathBuf>,
-    pub rpaths: Vec<PathBuf>,
+    pub ld_options: Vec<String>,
     pub defines: HashMap<String, Option<String>>,
     pub version: String,
     _priv: (),
@@ -558,7 +558,7 @@ impl Library {
             libs: Vec::new(),
             link_paths: Vec::new(),
             include_paths: Vec::new(),
-            rpaths: Vec::new(),
+            ld_options: Vec::new(),
             frameworks: Vec::new(),
             framework_paths: Vec::new(),
             defines: HashMap::new(),
@@ -669,15 +669,28 @@ impl Library {
                         self.include_paths.push(PathBuf::from(inc));
                     }
                 }
-                "-rpath" => {
-                    if let Some(rpath) = iter.next() {
-                        let meta = format!("rustc-link-arg=-Wl,-rpath,{}", rpath);
-                        config.print_metadata(&meta);
-                        self.rpaths.push(PathBuf::from(rpath));
-                    }
-                }
                 _ => (),
             }
+        }
+
+        let mut linker_options = words
+            .iter()
+            .filter(|arg| arg.starts_with("-Wl,"))
+            .filter(|arg| {
+                let option = &arg[4..];
+                for handled in &["-framework", "-isystem", "-iquote", "-idirafter"] {
+                    if option.starts_with(handled) {
+                        return false;
+                    }
+                }
+
+                true
+            });
+
+        while let Some(option) = linker_options.next() {
+            let meta = format!("rustc-link-arg={}", option);
+            config.print_metadata(&meta);
+            self.ld_options.push(option.to_string());
         }
     }
 

@@ -317,5 +317,7 @@ fn rpath() {
     let _g = LOCK.lock();
     reset();
     let lib = find("rpath").unwrap();
-    assert!(lib.rpaths.contains(&PathBuf::from("/usr/local/lib")));
+    assert!(lib
+        .ld_options
+        .contains(&"-Wl,-rpath,/usr/local/lib".to_string()));
 }
