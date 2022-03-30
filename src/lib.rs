@@ -683,9 +683,13 @@ impl Library {
                     continue;
                 }
 
-                if matches!(subopt, "-framework" | "-isystem" | "-iquote" | "idirafter") {
-                    pop = true;
-                    continue;
+                match subopt {
+                    "-framework" | "-isystem" | "-iquote" | "idirafter" => {
+                        pop = true;
+                        continue;
+                    }
+
+                    _ => (),
                 }
 
                 ld_option.push(subopt);
