@@ -98,7 +98,7 @@ pub struct Library {
     pub frameworks: Vec<String>,
     pub framework_paths: Vec<PathBuf>,
     pub include_paths: Vec<PathBuf>,
-    pub ld_options: Vec<String>,
+    pub ld_options: Vec<Vec<String>>,
     pub defines: HashMap<String, Option<String>>,
     pub version: String,
     _priv: (),
@@ -673,24 +673,29 @@ impl Library {
             }
         }
 
-        let mut linker_options = words
-            .iter()
-            .filter(|arg| arg.starts_with("-Wl,"))
-            .filter(|arg| {
-                let option = &arg[4..];
-                for handled in &["-framework", "-isystem", "-iquote", "-idirafter"] {
-                    if option.starts_with(handled) {
-                        return false;
-                    }
+        let mut linker_options = words.iter().filter(|arg| arg.starts_with("-Wl,"));
+        while let Some(option) = linker_options.next() {
+            let mut pop = false;
+            let mut ld_option = vec![];
+            for subopt in option[4..].split(',') {
+                if pop {
+                    pop = false;
+                    continue;
                 }
 
-                true
-            });
+                if matches!(subopt, "-framework" | "-isystem" | "-iquote" | "idirafter") {
+                    pop = true;
+                    continue;
+                }
 
-        while let Some(option) = linker_options.next() {
-            let meta = format!("rustc-link-arg={}", option);
+                ld_option.push(subopt);
+            }
+
+            let meta = format!("rustc-link-arg=-Wl,{}", ld_option.join(","));
             config.print_metadata(&meta);
-            self.ld_options.push(option.to_string());
+
+            self.ld_options
+                .push(ld_option.into_iter().map(String::from).collect());
         }
     }
 

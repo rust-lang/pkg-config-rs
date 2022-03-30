@@ -319,5 +319,5 @@ fn rpath() {
     let lib = find("rpath").unwrap();
     assert!(lib
         .ld_options
-        .contains(&"-Wl,-rpath,/usr/local/lib".to_string()));
+        .contains(&vec!["-rpath".to_string(), "/usr/local/lib".to_string(),]));
 }
