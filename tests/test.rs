@@ -318,6 +318,6 @@ fn rpath() {
     reset();
     let lib = find("rpath").unwrap();
     assert!(lib
-        .ld_options
+        .ld_args
         .contains(&vec!["-rpath".to_string(), "/usr/local/lib".to_string(),]));
 }
