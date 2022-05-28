@@ -91,6 +91,7 @@ pub struct Config {
     print_system_cflags: bool,
 }
 
+#[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct Library {
     pub libs: Vec<String>,
@@ -101,10 +102,10 @@ pub struct Library {
     pub ld_args: Vec<Vec<String>>,
     pub defines: HashMap<String, Option<String>>,
     pub version: String,
-    _priv: (),
 }
 
 /// Represents all reasons `pkg-config` might not succeed or be run at all.
+#[non_exhaustive]
 pub enum Error {
     /// Aborted because of `*_NO_PKG_CONFIG` environment variable.
     ///
@@ -136,10 +137,6 @@ pub enum Error {
         command: String,
         output: Output,
     },
-
-    #[doc(hidden)]
-    // please don't match on this, we're likely to add more variants over time
-    __Nonexhaustive,
 }
 
 impl error::Error for Error {}
@@ -219,7 +216,6 @@ impl fmt::Display for Error {
                 )?;
                 format_output(output, f)
             }
-            Error::__Nonexhaustive => panic!(),
         }
     }
 }
@@ -437,7 +433,7 @@ impl Config {
         match (env::var("TARGET"), env::var("HOST")) {
             (Ok(target), Ok(host)) => {
                 let kind = if host == target { "HOST" } else { "TARGET" };
-                let target_u = target.replace("-", "_");
+                let target_u = target.replace('-', "_");
 
                 self.env_var_os(&format!("{}_{}", var_base, target))
                     .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
@@ -522,17 +518,9 @@ impl Config {
 
     fn infer_static(&self, name: &str) -> bool {
         let name = envify(name);
-        if self.env_var_os(&format!("{}_STATIC", name)).is_some() {
-            true
-        } else if self.env_var_os(&format!("{}_DYNAMIC", name)).is_some() {
-            false
-        } else if self.env_var_os("PKG_CONFIG_ALL_STATIC").is_some() {
-            true
-        } else if self.env_var_os("PKG_CONFIG_ALL_DYNAMIC").is_some() {
-            false
-        } else {
-            false
-        }
+
+        self.env_var_os(&format!("{}_STATIC", name)).is_some()
+            || self.env_var_os("PKG_CONFIG_ALL_STATIC").is_some()
     }
 }
 
@@ -563,7 +551,6 @@ impl Library {
             framework_paths: Vec::new(),
             defines: HashMap::new(),
             version: String::new(),
-            _priv: (),
         }
     }
 
@@ -649,8 +636,8 @@ impl Library {
 
         // Handle multi-character arguments with space-separated value like `-framework foo`
         let mut iter = words.iter().flat_map(|arg| {
-            if arg.starts_with("-Wl,") {
-                arg[4..].split(',').collect()
+            if let Some(stripped_arg) = arg.strip_prefix("-Wl,") {
+                stripped_arg.split(',').collect()
             } else {
                 vec![arg.as_ref()]
             }
@@ -673,8 +660,8 @@ impl Library {
             }
         }
 
-        let mut linker_options = words.iter().filter(|arg| arg.starts_with("-Wl,"));
-        while let Some(option) = linker_options.next() {
+        let linker_options = words.iter().filter(|arg| arg.starts_with("-Wl,"));
+        for option in linker_options {
             let mut pop = false;
             let mut ld_option = vec![];
             for subopt in option[4..].split(',') {
@@ -700,7 +687,7 @@ impl Library {
     }
 
     fn parse_modversion(&mut self, output: &str) {
-        self.version.push_str(output.lines().nth(0).unwrap().trim());
+        self.version.push_str(output.lines().next().unwrap().trim());
     }
 }
 
