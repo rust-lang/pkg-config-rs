@@ -443,12 +443,14 @@ impl Config {
     fn targetted_env_var(&self, var_base: &str) -> Option<OsString> {
         match (env::var("TARGET"), env::var("HOST")) {
             (Ok(target), Ok(host)) => {
-                let kind = if host == target { "HOST" } else { "TARGET" };
+                let kind_suffix = if host == target { "_FOR_BUILD" } else { "" };
+                let kind_prefix = if host == target { "HOST" } else { "TARGET" };
                 let target_u = target.replace("-", "_");
 
                 self.env_var_os(&format!("{}_{}", var_base, target))
                     .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
-                    .or_else(|| self.env_var_os(&format!("{}_{}", kind, var_base)))
+                    .or_else(|| self.env_var_os(&format!("{}_{}", var_base, kind_suffix)))
+                    .or_else(|| self.env_var_os(&format!("{}_{}", kind_prefix, var_base)))
                     .or_else(|| self.env_var_os(var_base))
             }
             (Err(env::VarError::NotPresent), _) | (_, Err(env::VarError::NotPresent)) => {
