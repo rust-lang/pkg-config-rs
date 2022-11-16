@@ -449,7 +449,7 @@ impl Config {
 
                 self.env_var_os(&format!("{}_{}", var_base, target))
                     .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
-                    .or_else(|| self.env_var_os(&format!("{}_{}", var_base, kind_suffix)))
+                    .or_else(|| self.env_var_os(&format!("{}{}", var_base, kind_suffix)))
                     .or_else(|| self.env_var_os(&format!("{}_{}", kind_prefix, var_base)))
                     .or_else(|| self.env_var_os(var_base))
             }
