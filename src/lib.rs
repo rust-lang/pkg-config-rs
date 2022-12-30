@@ -660,6 +660,11 @@ impl Library {
             }
         };
 
+        // Some linkers are sensitive to the order in which libraries are specified
+        // in the command line. In order to account for them, the order in which
+        // they appear in the pkg-config output will be preserved.
+        let mut metadata_to_print: Vec<(usize, String)> = Vec::new();
+
         let mut dirs = Vec::new();
         let statik = config.is_static(name);
 
@@ -668,19 +673,20 @@ impl Library {
         // Handle single-character arguments like `-I/usr/include`
         let parts = words
             .iter()
-            .filter(|l| l.len() > 2)
-            .map(|arg| (&arg[0..2], &arg[2..]));
-        for (flag, val) in parts {
+            .enumerate()
+            .filter(|(_, l)| l.len() > 2)
+            .map(|(idx, arg)| (idx, &arg[0..2], &arg[2..]));
+        for (idx, flag, val) in parts {
             match flag {
                 "-L" => {
                     let meta = format!("rustc-link-search=native={}", val);
-                    config.print_metadata(&meta);
+                    metadata_to_print.push((idx, meta));
                     dirs.push(PathBuf::from(val));
                     self.link_paths.push(PathBuf::from(val));
                 }
                 "-F" => {
                     let meta = format!("rustc-link-search=framework={}", val);
-                    config.print_metadata(&meta);
+                    metadata_to_print.push((idx, meta));
                     self.framework_paths.push(PathBuf::from(val));
                 }
                 "-I" => {
@@ -694,10 +700,10 @@ impl Library {
 
                     if statik && is_static_available(val, &system_roots, &dirs) {
                         let meta = format!("rustc-link-lib=static={}", val);
-                        config.print_metadata(&meta);
+                        metadata_to_print.push((idx, meta));
                     } else {
                         let meta = format!("rustc-link-lib={}", val);
-                        config.print_metadata(&meta);
+                        metadata_to_print.push((idx, meta));
                     }
 
                     self.libs.push(val.to_string());
@@ -714,24 +720,24 @@ impl Library {
         }
 
         // Handle multi-character arguments with space-separated value like `-framework foo`
-        let mut iter = words.iter().flat_map(|arg| {
+        let mut iter = words.iter().enumerate().flat_map(|(idx, arg)| {
             if arg.starts_with("-Wl,") {
-                arg[4..].split(',').collect()
+                arg[4..].split(',').map(|part| (idx, part)).collect()
             } else {
-                vec![arg.as_ref()]
+                vec![(idx, arg.as_ref())]
             }
         });
-        while let Some(part) = iter.next() {
+        while let Some((idx, part)) = iter.next() {
             match part {
                 "-framework" => {
-                    if let Some(lib) = iter.next() {
+                    if let Some((idx, lib)) = iter.next() {
                         let meta = format!("rustc-link-lib=framework={}", lib);
-                        config.print_metadata(&meta);
+                        metadata_to_print.push((idx, meta));
                         self.frameworks.push(lib.to_string());
                     }
                 }
                 "-isystem" | "-iquote" | "-idirafter" => {
-                    if let Some(inc) = iter.next() {
+                    if let Some((_, inc)) = iter.next() {
                         self.include_paths.push(PathBuf::from(inc));
                     }
                 }
@@ -752,10 +758,10 @@ impl Library {
                                 Some(lib_basename) => {
                                     let link_search =
                                         format!("rustc-link-search={}", dir.display());
-                                    config.print_metadata(&link_search);
+                                    metadata_to_print.push((idx, link_search));
 
                                     let link_lib = format!("rustc-link-lib={}", lib_basename);
-                                    config.print_metadata(&link_lib);
+                                    metadata_to_print.push((idx, link_lib));
                                     self.link_files.push(PathBuf::from(path));
                                 }
                                 None => {
@@ -766,6 +772,14 @@ impl Library {
                     }
                 }
             }
+        }
+
+        // A single item in pkg-config's output can translate to multiple
+        // cargo commands and we want to preserve their order, therefore the use
+        // of stable sort is intentional here.
+        metadata_to_print.sort_by_key(|(idx, _)| *idx);
+        for (_, meta) in metadata_to_print {
+            config.print_metadata(&meta);
         }
 
         let mut linker_options = words.iter().filter(|arg| arg.starts_with("-Wl,"));
