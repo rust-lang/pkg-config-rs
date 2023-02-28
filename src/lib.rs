@@ -270,7 +270,7 @@ pub fn target_supported() -> bool {
 pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
     let cfg = Config::new();
-    let out = run(cfg.command(package, &[&arg]))?;
+    let out = cfg.run(package, &[&arg])?;
     Ok(str::from_utf8(&out).unwrap().trim_end().to_owned())
 }
 
@@ -392,17 +392,19 @@ impl Config {
 
         let mut library = Library::new();
 
-        let output = run(self.command(name, &["--libs", "--cflags"])).map_err(|e| match e {
-            Error::Failure { command, output } => Error::ProbeFailure {
-                name: name.to_owned(),
-                command,
-                output,
-            },
-            other => other,
-        })?;
+        let output = self
+            .run(name, &["--libs", "--cflags"])
+            .map_err(|e| match e {
+                Error::Failure { command, output } => Error::ProbeFailure {
+                    name: name.to_owned(),
+                    command,
+                    output,
+                },
+                other => other,
+            })?;
         library.parse_libs_cflags(name, &output, self);
 
-        let output = run(self.command(name, &["--modversion"]))?;
+        let output = self.run(name, &["--modversion"])?;
         library.parse_modversion(str::from_utf8(&output).unwrap());
 
         Ok(library)
@@ -474,10 +476,31 @@ impl Config {
         self.statik.unwrap_or_else(|| self.infer_static(name))
     }
 
-    fn command(&self, name: &str, args: &[&str]) -> Command {
+    fn run(&self, name: &str, args: &[&str]) -> Result<Vec<u8>, Error> {
         let exe = self
             .targetted_env_var("PKG_CONFIG")
             .unwrap_or_else(|| OsString::from("pkg-config"));
+
+        let mut cmd = self.command(exe, name, args);
+        match cmd.output() {
+            Ok(output) => {
+                if output.status.success() {
+                    Ok(output.stdout)
+                } else {
+                    Err(Error::Failure {
+                        command: format!("{:?}", cmd),
+                        output,
+                    })
+                }
+            }
+            Err(cause) => Err(Error::Command {
+                command: format!("{:?}", cmd),
+                cause,
+            }),
+        }
+    }
+
+    fn command(&self, exe: OsString, name: &str, args: &[&str]) -> Command {
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
@@ -813,25 +836,6 @@ fn is_static_available(name: &str, system_roots: &[PathBuf], dirs: &[PathBuf]) -
     dirs.iter().any(|dir| {
         !system_roots.iter().any(|sys| dir.starts_with(sys)) && dir.join(&libname).exists()
     })
-}
-
-fn run(mut cmd: Command) -> Result<Vec<u8>, Error> {
-    match cmd.output() {
-        Ok(output) => {
-            if output.status.success() {
-                Ok(output.stdout)
-            } else {
-                Err(Error::Failure {
-                    command: format!("{:?}", cmd),
-                    output,
-                })
-            }
-        }
-        Err(cause) => Err(Error::Command {
-            command: format!("{:?}", cmd),
-            cause,
-        }),
-    }
 }
 
 /// Split output produced by pkg-config --cflags and / or --libs into separate flags.
