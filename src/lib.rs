@@ -477,12 +477,23 @@ impl Config {
     }
 
     fn run(&self, name: &str, args: &[&str]) -> Result<Vec<u8>, Error> {
-        let exe = self
-            .targetted_env_var("PKG_CONFIG")
-            .unwrap_or_else(|| OsString::from("pkg-config"));
+        let pkg_config_exe = self.targetted_env_var("PKG_CONFIG");
+        let fallback_exe = if pkg_config_exe.is_none() {
+            Some(OsString::from("pkgconf"))
+        } else {
+            None
+        };
+        let exe = pkg_config_exe.unwrap_or_else(|| OsString::from("pkg-config"));
 
         let mut cmd = self.command(exe, name, args);
-        match cmd.output() {
+
+        match cmd.output().or_else(|e| {
+            if let Some(exe) = fallback_exe {
+                self.command(exe, name, args).output()
+            } else {
+                Err(e)
+            }
+        }) {
             Ok(output) => {
                 if output.status.success() {
                     Ok(output.stdout)
