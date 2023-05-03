@@ -446,7 +446,7 @@ impl Config {
         match (env::var("TARGET"), env::var("HOST")) {
             (Ok(target), Ok(host)) => {
                 let kind = if host == target { "HOST" } else { "TARGET" };
-                let target_u = target.replace("-", "_");
+                let target_u = target.replace('-', "_");
 
                 self.env_var_os(&format!("{}_{}", var_base, target))
                     .or_else(|| self.env_var_os(&format!("{}_{}", var_base, target_u)))
@@ -802,8 +802,8 @@ impl Library {
             }
         }
 
-        let mut linker_options = words.iter().filter(|arg| arg.starts_with("-Wl,"));
-        while let Some(option) = linker_options.next() {
+        let linker_options = words.iter().filter(|arg| arg.starts_with("-Wl,"));
+        for option in linker_options {
             let mut pop = false;
             let mut ld_option = vec![];
             for subopt in option[4..].split(',') {
@@ -829,7 +829,7 @@ impl Library {
     }
 
     fn parse_modversion(&mut self, output: &str) {
-        self.version.push_str(output.lines().nth(0).unwrap().trim());
+        self.version.push_str(output.lines().next().unwrap().trim());
     }
 }
 

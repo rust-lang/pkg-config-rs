@@ -24,10 +24,7 @@ fn reset() {
     }
     env::remove_var("TARGET");
     env::remove_var("HOST");
-    env::set_var(
-        "PKG_CONFIG_PATH",
-        &env::current_dir().unwrap().join("tests"),
-    );
+    env::set_var("PKG_CONFIG_PATH", env::current_dir().unwrap().join("tests"));
 }
 
 fn find(name: &str) -> Result<pkg_config::Library, Error> {
