@@ -208,12 +208,72 @@ impl fmt::Display for Error {
                 ref command,
                 ref output,
             } => {
-                write!(
+                let crate_name =
+                    env::var("CARGO_PKG_NAME").unwrap_or(String::from("<NO CRATE NAME>"));
+
+                writeln!(f, "")?;
+
+                // Give a short explanation of what the error is
+                writeln!(
                     f,
-                    "`{}` did not exit successfully: {}\nerror: could not find system library '{}' required by the '{}' crate\n",
-                    command, output.status, name, env::var("CARGO_PKG_NAME").unwrap_or_default(),
+                    "pkg-config {}",
+                    match output.status.code() {
+                        Some(code) => format!("exited with status code {}", code),
+                        None => "was terminated by signal".to_string(),
+                    }
                 )?;
-                format_output(output, f)
+
+                // Give the command run so users can reproduce the error
+                writeln!(f, "> {}\n", command)?;
+
+                // Explain how it was caused
+                writeln!(
+                    f,
+                    "The system library `{}` required by crate `{}` was not found.",
+                    name, crate_name
+                )?;
+                writeln!(
+                    f,
+                    "The file `{}.pc` needs to be installed and the PKG_CONFIG_PATH environment variable must contain its parent directory.",
+                    name
+                )?;
+
+                // There will be no status code if terminated by signal
+                if let Some(_code) = output.status.code() {
+                    // NixOS uses a wrapper script for pkg-config that sets the custom
+                    // environment variable PKG_CONFIG_PATH_FOR_TARGET
+                    let search_path =
+                        if let Ok(path_for_target) = env::var("PKG_CONFIG_PATH_FOR_TARGET") {
+                            Some(path_for_target)
+                        } else if let Ok(path) = env::var("PKG_CONFIG_PATH") {
+                            Some(path)
+                        } else {
+                            None
+                        };
+
+                    // Guess the most reasonable course of action
+                    let hint = if let Some(search_path) = search_path {
+                        writeln!(
+                            f,
+                            "PKG_CONFIG_PATH contains the following:\n{}",
+                            search_path
+                                .split(':')
+                                .map(|path| format!("    - {}", path))
+                                .collect::<Vec<String>>()
+                                .join("\n"),
+                        )?;
+
+                        format!("you may need to install a package such as {name}, {name}-dev or {name}-devel.", name=name)
+                    } else {
+                        writeln!(f, "PKG_CONFIG_PATH environment variable is not set")?;
+                        format!("If you have installed the library, try adding its parent directory to your PATH.")
+                    };
+
+                    // Try and nudge the user in the right direction so they don't get stuck
+                    writeln!(f, "\nHINT: {}", hint)?;
+                }
+
+                Ok(())
             }
             Error::Failure {
                 ref command,
@@ -498,8 +558,34 @@ impl Config {
                 if output.status.success() {
                     Ok(output.stdout)
                 } else {
+                    // Collect all explicitly-defined environment variables
+                    // this is used to display the equivalent pkg-config shell invocation
+                    let envs = cmd
+                        .get_envs()
+                        .map(|(env, optional_arg)| {
+                            if let Some(arg) = optional_arg {
+                                format!("{}={}", env.to_string_lossy(), arg.to_string_lossy())
+                            } else {
+                                env.to_string_lossy().to_string()
+                            }
+                        })
+                        .collect::<Vec<String>>();
+
+                    // Collect arguments for the same reason
+                    let args = cmd
+                        .get_args()
+                        .map(|arg| arg.to_string_lossy().to_string())
+                        .collect::<Vec<String>>();
+
+                    // This will look something like:
+                    // PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 pkg-config --libs --cflags {library}
                     Err(Error::Failure {
-                        command: format!("{:?}", cmd),
+                        command: format!(
+                            "{} {} {}",
+                            envs.join(" "),
+                            cmd.get_program().to_string_lossy(),
+                            args.join(" ")
+                        ),
                         output,
                     })
                 }
