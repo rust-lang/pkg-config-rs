@@ -270,7 +270,7 @@ pub fn target_supported() -> bool {
 pub fn get_variable(package: &str, variable: &str) -> Result<String, Error> {
     let arg = format!("--variable={}", variable);
     let cfg = Config::new();
-    let out = cfg.run(package, &[&arg])?;
+    let out = cfg.run(package, &[&arg], false)?;
     Ok(str::from_utf8(&out).unwrap().trim_end().to_owned())
 }
 
@@ -393,7 +393,7 @@ impl Config {
         let mut library = Library::new();
 
         let output = self
-            .run(name, &["--libs", "--cflags"])
+            .run(name, &["--libs", "--cflags"], true)
             .map_err(|e| match e {
                 Error::Failure { command, output } => Error::ProbeFailure {
                     name: name.to_owned(),
@@ -404,7 +404,7 @@ impl Config {
             })?;
         library.parse_libs_cflags(name, &output, self);
 
-        let output = self.run(name, &["--modversion"])?;
+        let output = self.run(name, &["--modversion"], false)?;
         library.parse_modversion(str::from_utf8(&output).unwrap());
 
         Ok(library)
@@ -476,7 +476,7 @@ impl Config {
         self.statik.unwrap_or_else(|| self.infer_static(name))
     }
 
-    fn run(&self, name: &str, args: &[&str]) -> Result<Vec<u8>, Error> {
+    fn run(&self, name: &str, args: &[&str], restrict_version: bool) -> Result<Vec<u8>, Error> {
         let pkg_config_exe = self.targetted_env_var("PKG_CONFIG");
         let fallback_exe = if pkg_config_exe.is_none() {
             Some(OsString::from("pkgconf"))
@@ -485,11 +485,11 @@ impl Config {
         };
         let exe = pkg_config_exe.unwrap_or_else(|| OsString::from("pkg-config"));
 
-        let mut cmd = self.command(exe, name, args);
+        let mut cmd = self.command(exe, name, args, restrict_version);
 
         match cmd.output().or_else(|e| {
             if let Some(exe) = fallback_exe {
-                self.command(exe, name, args).output()
+                self.command(exe, name, args, restrict_version).output()
             } else {
                 Err(e)
             }
@@ -511,7 +511,7 @@ impl Config {
         }
     }
 
-    fn command(&self, exe: OsString, name: &str, args: &[&str]) -> Command {
+    fn command(&self, exe: OsString, name: &str, args: &[&str], restrict_version: bool) -> Command {
         let mut cmd = Command::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
@@ -534,23 +534,25 @@ impl Config {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_CFLAGS", "1");
         }
         cmd.arg(name);
-        match self.min_version {
-            Bound::Included(ref version) => {
-                cmd.arg(&format!("{} >= {}", name, version));
+        if restrict_version {
+            match self.min_version {
+                Bound::Included(ref version) => {
+                    cmd.arg(&format!("{} >= {}", name, version));
+                }
+                Bound::Excluded(ref version) => {
+                    cmd.arg(&format!("{} > {}", name, version));
+                }
+                _ => (),
             }
-            Bound::Excluded(ref version) => {
-                cmd.arg(&format!("{} > {}", name, version));
+            match self.max_version {
+                Bound::Included(ref version) => {
+                    cmd.arg(&format!("{} <= {}", name, version));
+                }
+                Bound::Excluded(ref version) => {
+                    cmd.arg(&format!("{} < {}", name, version));
+                }
+                _ => (),
             }
-            _ => (),
-        }
-        match self.max_version {
-            Bound::Included(ref version) => {
-                cmd.arg(&format!("{} <= {}", name, version));
-            }
-            Bound::Excluded(ref version) => {
-                cmd.arg(&format!("{} < {}", name, version));
-            }
-            _ => (),
         }
         cmd
     }
