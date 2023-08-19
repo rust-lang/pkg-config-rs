@@ -513,6 +513,7 @@ impl Config {
 
     fn command(&self, exe: OsString, name: &str, args: &[&str]) -> Command {
         let mut cmd = Command::new(exe);
+        let mut pkg_added: bool = false;
         if self.is_static(name) {
             cmd.arg("--static");
         }
@@ -533,24 +534,30 @@ impl Config {
         if self.print_system_cflags {
             cmd.env("PKG_CONFIG_ALLOW_SYSTEM_CFLAGS", "1");
         }
-        cmd.arg(name);
         match self.min_version {
             Bound::Included(ref version) => {
                 cmd.arg(&format!("{} >= {}", name, version));
+                pkg_added = true;
             }
             Bound::Excluded(ref version) => {
                 cmd.arg(&format!("{} > {}", name, version));
+                pkg_added = true;
             }
             _ => (),
         }
         match self.max_version {
             Bound::Included(ref version) => {
                 cmd.arg(&format!("{} <= {}", name, version));
+                pkg_added = true;
             }
             Bound::Excluded(ref version) => {
                 cmd.arg(&format!("{} < {}", name, version));
+                pkg_added = true;
             }
             _ => (),
+        }
+        if !pkg_added {
+            cmd.arg(name);
         }
         cmd
     }
