@@ -776,34 +776,38 @@ impl Library {
         }
 
         let prefix = "lib";
-        if target.contains("msvc") {
-            // According to link.exe documentation:
-            // https://learn.microsoft.com/en-us/cpp/build/reference/link-input-files?view=msvc-170
-            //
-            //   LINK doesn't use file extensions to make assumptions about the contents of a file.
-            //   Instead, LINK examines each input file to determine what kind of file it is.
-            //
-            // However, rustc appends `.lib` to the string it receives from the -l command line argument,
-            // which it receives from Cargo via cargo:rustc-link-lib:
-            // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L828
-            // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L843
-            // So the only file extension that works for MSVC targets is `.lib`
-            return test_suffixes(filename, &[".lib"]);
-        } else if target.contains("windows") && target.contains("gnu") {
-            // GNU targets for Windows, including gnullvm, use `LinkerFlavor::Gcc` internally in rustc,
-            // which tells rustc to use the GNU linker. rustc does not prepend/append to the string it
-            // receives via the -l command line argument before passing it to the linker:
-            // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L446
-            // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L457
-            // GNU ld can work with more types of files than just the .lib files that MSVC's link.exe needs.
-            // GNU ld will prepend the `lib` prefix to the filename if necessary, so it is okay to remove
-            // the `lib` prefix from the filename. The `.a` suffix *requires* the `lib` prefix.
-            // https://sourceware.org/binutils/docs-2.39/ld.html#index-direct-linking-to-a-dll
-            if filename.starts_with(prefix) {
+        if target.contains("windows") {
+            if target.contains("gnu") && filename.starts_with(prefix) {
+                // GNU targets for Windows, including gnullvm, use `LinkerFlavor::Gcc` internally in rustc,
+                // which tells rustc to use the GNU linker. rustc does not prepend/append to the string it
+                // receives via the -l command line argument before passing it to the linker:
+                // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L446
+                // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L457
+                // GNU ld can work with more types of files than just the .lib files that MSVC's link.exe needs.
+                // GNU ld will prepend the `lib` prefix to the filename if necessary, so it is okay to remove
+                // the `lib` prefix from the filename. The `.a` suffix *requires* the `lib` prefix.
+                // https://sourceware.org/binutils/docs-2.39/ld.html#index-direct-linking-to-a-dll
                 let filename = &filename[prefix.len()..];
                 return test_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"]);
             } else {
-                return test_suffixes(filename, &[".dll.a", ".dll", ".lib"]);
+                // According to link.exe documentation:
+                // https://learn.microsoft.com/en-us/cpp/build/reference/link-input-files?view=msvc-170
+                //
+                //   LINK doesn't use file extensions to make assumptions about the contents of a file.
+                //   Instead, LINK examines each input file to determine what kind of file it is.
+                //
+                // However, rustc appends `.lib` to the string it receives from the -l command line argument,
+                // which it receives from Cargo via cargo:rustc-link-lib:
+                // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L828
+                // https://github.com/rust-lang/rust/blob/657f246812ab2684e3c3954b1c77f98fd59e0b21/compiler/rustc_codegen_ssa/src/back/linker.rs#L843
+                // So the only file extension that works for MSVC targets is `.lib`
+                // However, for externally created libraries, there's no
+                // guarantee that the extension is ".lib" so we need to
+                // consider all options.
+                // See:
+                // https://github.com/mesonbuild/meson/issues/8153
+                // https://github.com/rust-lang/rust/issues/114013
+                return test_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"]);
             }
         } else if target.contains("apple") {
             if filename.starts_with(prefix) {
