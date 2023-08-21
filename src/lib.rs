@@ -1004,10 +1004,19 @@ fn envify(name: &str) -> String {
 
 /// System libraries should only be linked dynamically
 fn is_static_available(name: &str, system_roots: &[PathBuf], dirs: &[PathBuf]) -> bool {
-    let libname = format!("lib{}.a", name);
+    let libnames = {
+        let mut names = vec![format!("lib{}.a", name)];
+
+        if cfg!(target_os = "windows") {
+            names.push(format!("{}.lib", name));
+        }
+
+        names
+    };
 
     dirs.iter().any(|dir| {
-        !system_roots.iter().any(|sys| dir.starts_with(sys)) && dir.join(&libname).exists()
+        let library_exists = libnames.iter().any(|libname| dir.join(&libname).exists());
+        library_exists && !system_roots.iter().any(|sys| dir.starts_with(sys))
     })
 }
 
