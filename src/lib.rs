@@ -905,6 +905,10 @@ impl Library {
                         iter.next().map(|s| s.to_owned()),
                     );
                 }
+                "-u" => {
+                    let meta = format!("rustc-link-arg=-Wl,-u,{}", val);
+                    config.print_metadata(&meta);
+                }
                 _ => {}
             }
         }
@@ -929,6 +933,12 @@ impl Library {
                 "-isystem" | "-iquote" | "-idirafter" => {
                     if let Some(inc) = iter.next() {
                         self.include_paths.push(PathBuf::from(inc));
+                    }
+                }
+                "-undefined" | "--undefined" => {
+                    if let Some(symbol) = iter.next() {
+                        let meta = format!("rustc-link-arg=-Wl,{},{}", part, symbol);
+                        config.print_metadata(&meta);
                     }
                 }
                 _ => {
