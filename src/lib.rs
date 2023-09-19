@@ -129,12 +129,12 @@ pub enum Error {
     /// Contains the command and the cause.
     Command { command: String, cause: io::Error },
 
-    /// `pkg-config` did not exit sucessfully after probing a library.
+    /// `pkg-config` did not exit successfully after probing a library.
     ///
     /// Contains the command and output.
     Failure { command: String, output: Output },
 
-    /// `pkg-config` did not exit sucessfully on the first attempt to probe a library.
+    /// `pkg-config` did not exit successfully on the first attempt to probe a library.
     ///
     /// Contains the command and output.
     ProbeFailure {
@@ -423,15 +423,15 @@ impl Config {
 
         // pkg-config may not be aware of cross-compilation, and require
         // a wrapper script that sets up platform-specific prefixes.
-        match self.targetted_env_var("PKG_CONFIG_ALLOW_CROSS") {
+        match self.targeted_env_var("PKG_CONFIG_ALLOW_CROSS") {
             // don't use pkg-config if explicitly disabled
             Some(ref val) if val == "0" => false,
             Some(_) => true,
             None => {
                 // if not disabled, and pkg-config is customized,
                 // then assume it's prepared for cross-compilation
-                self.targetted_env_var("PKG_CONFIG").is_some()
-                    || self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR").is_some()
+                self.targeted_env_var("PKG_CONFIG").is_some()
+                    || self.targeted_env_var("PKG_CONFIG_SYSROOT_DIR").is_some()
             }
         }
     }
@@ -442,7 +442,7 @@ impl Config {
         get_variable(package, variable).map_err(|e| e.to_string())
     }
 
-    fn targetted_env_var(&self, var_base: &str) -> Option<OsString> {
+    fn targeted_env_var(&self, var_base: &str) -> Option<OsString> {
         match (env::var("TARGET"), env::var("HOST")) {
             (Ok(target), Ok(host)) => {
                 let kind = if host == target { "HOST" } else { "TARGET" };
@@ -477,7 +477,7 @@ impl Config {
     }
 
     fn run(&self, name: &str, args: &[&str]) -> Result<Vec<u8>, Error> {
-        let pkg_config_exe = self.targetted_env_var("PKG_CONFIG");
+        let pkg_config_exe = self.targeted_env_var("PKG_CONFIG");
         let fallback_exe = if pkg_config_exe.is_none() {
             Some(OsString::from("pkgconf"))
         } else {
@@ -518,13 +518,13 @@ impl Config {
         }
         cmd.args(args).args(&self.extra_args);
 
-        if let Some(value) = self.targetted_env_var("PKG_CONFIG_PATH") {
+        if let Some(value) = self.targeted_env_var("PKG_CONFIG_PATH") {
             cmd.env("PKG_CONFIG_PATH", value);
         }
-        if let Some(value) = self.targetted_env_var("PKG_CONFIG_LIBDIR") {
+        if let Some(value) = self.targeted_env_var("PKG_CONFIG_LIBDIR") {
             cmd.env("PKG_CONFIG_LIBDIR", value);
         }
-        if let Some(value) = self.targetted_env_var("PKG_CONFIG_SYSROOT_DIR") {
+        if let Some(value) = self.targeted_env_var("PKG_CONFIG_SYSROOT_DIR") {
             cmd.env("PKG_CONFIG_SYSROOT_DIR", value);
         }
         if self.print_system_libs {
@@ -577,7 +577,7 @@ impl Config {
     }
 }
 
-// Implement Default manualy since Bound does not implement Default.
+// Implement Default manually since Bound does not implement Default.
 impl Default for Config {
     fn default() -> Config {
         Config {
