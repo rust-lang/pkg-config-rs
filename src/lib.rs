@@ -67,11 +67,22 @@ use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::fmt::Display;
 use std::io;
 use std::ops::{Bound, RangeBounds};
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::str;
+
+/// Wrapper struct to polyfill methods introduced in 1.57 (`get_envs`, `get_args` etc).
+/// This is needed to reconstruct the pkg-config command for output in a copy-
+/// paste friendly format via `Display`.
+struct WrappedCommand {
+    inner: Command,
+    program: OsString,
+    env_vars: Vec<(OsString, OsString)>,
+    args: Vec<OsString>,
+}
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -146,6 +157,81 @@ pub enum Error {
     #[doc(hidden)]
     // please don't match on this, we're likely to add more variants over time
     __Nonexhaustive,
+}
+
+impl WrappedCommand {
+    fn new<S: AsRef<OsStr>>(program: S) -> Self {
+        Self {
+            inner: Command::new(program.as_ref()),
+            program: program.as_ref().to_os_string(),
+            env_vars: Vec::new(),
+            args: Vec::new(),
+        }
+    }
+
+    fn args<I, S>(&mut self, args: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S> + Clone,
+        S: AsRef<OsStr>,
+    {
+        self.inner.args(args.clone());
+        self.args
+            .extend(args.into_iter().map(|arg| arg.as_ref().to_os_string()));
+
+        self
+    }
+
+    fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
+        self.inner.arg(arg.as_ref());
+        self.args.push(arg.as_ref().to_os_string());
+
+        self
+    }
+
+    fn env<K, V>(&mut self, key: K, value: V) -> &mut Self
+    where
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
+        self.inner.env(key.as_ref(), value.as_ref());
+        self.env_vars
+            .push((key.as_ref().to_os_string(), value.as_ref().to_os_string()));
+
+        self
+    }
+
+    fn output(&mut self) -> io::Result<Output> {
+        self.inner.output()
+    }
+}
+
+/// Output a command invocation that can be copy-pasted into the terminal.
+/// `Command`'s existing debug implementation is not used for that reason,
+/// as it can sometimes lead to output such as:
+/// `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS="1" PKG_CONFIG_ALLOW_SYSTEM_LIBS="1" "pkg-config" "--libs" "--cflags" "mylibrary"`
+/// Which cannot be copy-pasted into terminals such as nushell, and is a bit noisy.
+/// This will look something like:
+/// `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 pkg-config --libs --cflags mylibrary`
+impl Display for WrappedCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Format all explicitly defined environment variables
+        let envs = self
+            .env_vars
+            .iter()
+            .map(|(env, arg)| format!("{}={}", env.to_string_lossy(), arg.to_string_lossy()))
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        // Format all pkg-config arguments
+        let args = self
+            .args
+            .iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        write!(f, "{} {} {}", envs, self.program.to_string_lossy(), args)
+    }
 }
 
 impl error::Error for Error {}
@@ -558,47 +644,21 @@ impl Config {
                 if output.status.success() {
                     Ok(output.stdout)
                 } else {
-                    // Collect all explicitly-defined environment variables
-                    // this is used to display the equivalent pkg-config shell invocation
-                    let envs = cmd
-                        .get_envs()
-                        .map(|(env, optional_arg)| {
-                            if let Some(arg) = optional_arg {
-                                format!("{}={}", env.to_string_lossy(), arg.to_string_lossy())
-                            } else {
-                                env.to_string_lossy().to_string()
-                            }
-                        })
-                        .collect::<Vec<String>>();
-
-                    // Collect arguments for the same reason
-                    let args = cmd
-                        .get_args()
-                        .map(|arg| arg.to_string_lossy().to_string())
-                        .collect::<Vec<String>>();
-
-                    // This will look something like:
-                    // PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 pkg-config --libs --cflags {library}
                     Err(Error::Failure {
-                        command: format!(
-                            "{} {} {}",
-                            envs.join(" "),
-                            cmd.get_program().to_string_lossy(),
-                            args.join(" ")
-                        ),
+                        command: format!("{}", cmd),
                         output,
                     })
                 }
             }
             Err(cause) => Err(Error::Command {
-                command: format!("{:?}", cmd),
+                command: format!("{}", cmd),
                 cause,
             }),
         }
     }
 
-    fn command(&self, exe: OsString, name: &str, args: &[&str]) -> Command {
-        let mut cmd = Command::new(exe);
+    fn command(&self, exe: OsString, name: &str, args: &[&str]) -> WrappedCommand {
+        let mut cmd = WrappedCommand::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
         }
