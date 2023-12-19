@@ -332,7 +332,7 @@ impl fmt::Display for Error {
 
                     // Find a search path to use
                     let mut search_data = None;
-                    for location in search_locations {
+                    for location in search_locations.iter() {
                         if let Ok(search_path) = env::var(location) {
                             search_data = Some((location, search_path));
                             break;
