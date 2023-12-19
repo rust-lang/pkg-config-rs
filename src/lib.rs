@@ -326,22 +326,25 @@ impl fmt::Display for Error {
 
                 // There will be no status code if terminated by signal
                 if let Some(_code) = output.status.code() {
-                    // NixOS uses a wrapper script for pkg-config that sets the custom
+                    // Nix uses a wrapper script for pkg-config that sets the custom
                     // environment variable PKG_CONFIG_PATH_FOR_TARGET
-                    let search_path =
-                        if let Ok(path_for_target) = env::var("PKG_CONFIG_PATH_FOR_TARGET") {
-                            Some(path_for_target)
-                        } else if let Ok(path) = env::var("PKG_CONFIG_PATH") {
-                            Some(path)
-                        } else {
-                            None
-                        };
+                    let search_locations = ["PKG_CONFIG_PATH_FOR_TARGET", "PKG_CONFIG_PATH"];
+
+                    // Find a search path to use
+                    let mut search_data = None;
+                    for location in search_locations {
+                        if let Ok(search_path) = env::var(location) {
+                            search_data = Some((location, search_path));
+                            break;
+                        }
+                    }
 
                     // Guess the most reasonable course of action
-                    let hint = if let Some(search_path) = search_path {
+                    let hint = if let Some((search_location, search_path)) = search_data {
                         writeln!(
                             f,
-                            "PKG_CONFIG_PATH contains the following:\n{}",
+                            "{} contains the following:\n{}",
+                            search_location,
                             search_path
                                 .split(':')
                                 .map(|path| format!("    - {}", path))
@@ -351,8 +354,13 @@ impl fmt::Display for Error {
 
                         format!("you may need to install a package such as {name}, {name}-dev or {name}-devel.", name=name)
                     } else {
-                        writeln!(f, "PKG_CONFIG_PATH environment variable is not set")?;
-                        format!("If you have installed the library, try adding its parent directory to your PATH.")
+                        // Even on Nix, setting PKG_CONFIG_PATH seems to be a viable option
+                        writeln!(f, "The PKG_CONFIG_PATH environment variable is not set.")?;
+
+                        format!(
+                            "if you have installed the library, try setting PKG_CONFIG_PATH to the directory containing `{}.pc`.",
+                            name
+                        )
                     };
 
                     // Try and nudge the user in the right direction so they don't get stuck
