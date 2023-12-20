@@ -67,11 +67,22 @@ use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::fmt::Display;
 use std::io;
 use std::ops::{Bound, RangeBounds};
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::str;
+
+/// Wrapper struct to polyfill methods introduced in 1.57 (`get_envs`, `get_args` etc).
+/// This is needed to reconstruct the pkg-config command for output in a copy-
+/// paste friendly format via `Display`.
+struct WrappedCommand {
+    inner: Command,
+    program: OsString,
+    env_vars: Vec<(OsString, OsString)>,
+    args: Vec<OsString>,
+}
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -148,6 +159,81 @@ pub enum Error {
     __Nonexhaustive,
 }
 
+impl WrappedCommand {
+    fn new<S: AsRef<OsStr>>(program: S) -> Self {
+        Self {
+            inner: Command::new(program.as_ref()),
+            program: program.as_ref().to_os_string(),
+            env_vars: Vec::new(),
+            args: Vec::new(),
+        }
+    }
+
+    fn args<I, S>(&mut self, args: I) -> &mut Self
+    where
+        I: IntoIterator<Item = S> + Clone,
+        S: AsRef<OsStr>,
+    {
+        self.inner.args(args.clone());
+        self.args
+            .extend(args.into_iter().map(|arg| arg.as_ref().to_os_string()));
+
+        self
+    }
+
+    fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Self {
+        self.inner.arg(arg.as_ref());
+        self.args.push(arg.as_ref().to_os_string());
+
+        self
+    }
+
+    fn env<K, V>(&mut self, key: K, value: V) -> &mut Self
+    where
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
+        self.inner.env(key.as_ref(), value.as_ref());
+        self.env_vars
+            .push((key.as_ref().to_os_string(), value.as_ref().to_os_string()));
+
+        self
+    }
+
+    fn output(&mut self) -> io::Result<Output> {
+        self.inner.output()
+    }
+}
+
+/// Output a command invocation that can be copy-pasted into the terminal.
+/// `Command`'s existing debug implementation is not used for that reason,
+/// as it can sometimes lead to output such as:
+/// `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS="1" PKG_CONFIG_ALLOW_SYSTEM_LIBS="1" "pkg-config" "--libs" "--cflags" "mylibrary"`
+/// Which cannot be copy-pasted into terminals such as nushell, and is a bit noisy.
+/// This will look something like:
+/// `PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 PKG_CONFIG_ALLOW_SYSTEM_LIBS=1 pkg-config --libs --cflags mylibrary`
+impl Display for WrappedCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Format all explicitly defined environment variables
+        let envs = self
+            .env_vars
+            .iter()
+            .map(|(env, arg)| format!("{}={}", env.to_string_lossy(), arg.to_string_lossy()))
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        // Format all pkg-config arguments
+        let args = self
+            .args
+            .iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        write!(f, "{} {} {}", envs, self.program.to_string_lossy(), args)
+    }
+}
+
 impl error::Error for Error {}
 
 impl fmt::Debug for Error {
@@ -208,12 +294,80 @@ impl fmt::Display for Error {
                 ref command,
                 ref output,
             } => {
-                write!(
+                let crate_name =
+                    env::var("CARGO_PKG_NAME").unwrap_or(String::from("<NO CRATE NAME>"));
+
+                writeln!(f, "")?;
+
+                // Give a short explanation of what the error is
+                writeln!(
                     f,
-                    "`{}` did not exit successfully: {}\nerror: could not find system library '{}' required by the '{}' crate\n",
-                    command, output.status, name, env::var("CARGO_PKG_NAME").unwrap_or_default(),
+                    "pkg-config {}",
+                    match output.status.code() {
+                        Some(code) => format!("exited with status code {}", code),
+                        None => "was terminated by signal".to_string(),
+                    }
                 )?;
-                format_output(output, f)
+
+                // Give the command run so users can reproduce the error
+                writeln!(f, "> {}\n", command)?;
+
+                // Explain how it was caused
+                writeln!(
+                    f,
+                    "The system library `{}` required by crate `{}` was not found.",
+                    name, crate_name
+                )?;
+                writeln!(
+                    f,
+                    "The file `{}.pc` needs to be installed and the PKG_CONFIG_PATH environment variable must contain its parent directory.",
+                    name
+                )?;
+
+                // There will be no status code if terminated by signal
+                if let Some(_code) = output.status.code() {
+                    // Nix uses a wrapper script for pkg-config that sets the custom
+                    // environment variable PKG_CONFIG_PATH_FOR_TARGET
+                    let search_locations = ["PKG_CONFIG_PATH_FOR_TARGET", "PKG_CONFIG_PATH"];
+
+                    // Find a search path to use
+                    let mut search_data = None;
+                    for location in search_locations.iter() {
+                        if let Ok(search_path) = env::var(location) {
+                            search_data = Some((location, search_path));
+                            break;
+                        }
+                    }
+
+                    // Guess the most reasonable course of action
+                    let hint = if let Some((search_location, search_path)) = search_data {
+                        writeln!(
+                            f,
+                            "{} contains the following:\n{}",
+                            search_location,
+                            search_path
+                                .split(':')
+                                .map(|path| format!("    - {}", path))
+                                .collect::<Vec<String>>()
+                                .join("\n"),
+                        )?;
+
+                        format!("you may need to install a package such as {name}, {name}-dev or {name}-devel.", name=name)
+                    } else {
+                        // Even on Nix, setting PKG_CONFIG_PATH seems to be a viable option
+                        writeln!(f, "The PKG_CONFIG_PATH environment variable is not set.")?;
+
+                        format!(
+                            "if you have installed the library, try setting PKG_CONFIG_PATH to the directory containing `{}.pc`.",
+                            name
+                        )
+                    };
+
+                    // Try and nudge the user in the right direction so they don't get stuck
+                    writeln!(f, "\nHINT: {}", hint)?;
+                }
+
+                Ok(())
             }
             Error::Failure {
                 ref command,
@@ -499,20 +653,20 @@ impl Config {
                     Ok(output.stdout)
                 } else {
                     Err(Error::Failure {
-                        command: format!("{:?}", cmd),
+                        command: format!("{}", cmd),
                         output,
                     })
                 }
             }
             Err(cause) => Err(Error::Command {
-                command: format!("{:?}", cmd),
+                command: format!("{}", cmd),
                 cause,
             }),
         }
     }
 
-    fn command(&self, exe: OsString, name: &str, args: &[&str]) -> Command {
-        let mut cmd = Command::new(exe);
+    fn command(&self, exe: OsString, name: &str, args: &[&str]) -> WrappedCommand {
+        let mut cmd = WrappedCommand::new(exe);
         if self.is_static(name) {
             cmd.arg("--static");
         }
