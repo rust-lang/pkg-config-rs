@@ -23,12 +23,10 @@ jobs:
           - beta
           - nightly
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
-        default: true
-        profile: minimal
     - run: rustup component add rustfmt-preview
     - name: cargo fmt --all -- --check if stable
       run: |
