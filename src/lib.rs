@@ -6,18 +6,18 @@
 //! `Config` structure serves as a method of configuring how `pkg-config` is
 //! invoked in a builder style.
 //!
+//! After running `pkg-config` all appropriate Cargo metadata will be printed on
+//! stdout if the search was successful.
+//!
+//! # Environment variables
+//!
 //! A number of environment variables are available to globally configure how
 //! this crate will invoke `pkg-config`:
 //!
 //! * `FOO_NO_PKG_CONFIG` - if set, this will disable running `pkg-config` when
 //!   probing for the library named `foo`.
 //!
-//! * `PKG_CONFIG_ALLOW_CROSS` - The `pkg-config` command usually doesn't
-//!   support cross-compilation, and this crate prevents it from selecting
-//!   incompatible versions of libraries.
-//!   Setting `PKG_CONFIG_ALLOW_CROSS=1` disables this protection, which is
-//!   likely to cause linking errors, unless `pkg-config` has been configured
-//!   to use appropriate sysroot and search paths for the target platform.
+//! ### Linking
 //!
 //! There are also a number of environment variables which can configure how a
 //! library is linked to (dynamically vs statically). These variables control
@@ -30,8 +30,30 @@
 //! * `PKG_CONFIG_ALL_STATIC` - pass `--static` for all libraries
 //! * `PKG_CONFIG_ALL_DYNAMIC` - do not pass `--static` for all libraries
 //!
-//! After running `pkg-config` all appropriate Cargo metadata will be printed on
-//! stdout if the search was successful.
+//! ### Cross-compilation
+//!
+//! In cross-compilation context, it is useful to manage separately
+//! `PKG_CONFIG_PATH` and a few other variables for the `host` and the `target`
+//! platform.
+//!
+//! The supported variables are: `PKG_CONFIG_PATH`, `PKG_CONFIG_LIBDIR`, and
+//! `PKG_CONFIG_SYSROOT_DIR`.
+//!
+//! Each of these variables can also be supplied with certain prefixes and
+//! suffixes, in the following prioritized order:
+//!
+//! 1. `<var>_<target>` - for example, `PKG_CONFIG_PATH_x86_64-unknown-linux-gnu`
+//! 2. `<var>_<target_with_underscores>` - for example,
+//!    `PKG_CONFIG_PATH_x86_64_unknown_linux_gnu`
+//! 3. `<build-kind>_<var>` - for example, `HOST_PKG_CONFIG_PATH` or
+//!    `TARGET_PKG_CONFIG_PATH`
+//! 4. `<var>` - a plain `PKG_CONFIG_PATH`
+//!
+//! This crate will allow `pkg-config` to be used in cross-compilation
+//! if `PKG_CONFIG_SYSROOT_DIR` or `PKG_CONFIG` is set. You can set
+//! `PKG_CONFIG_ALLOW_CROSS=1` to bypass the compatibility check, but please
+//! note that enabling use of `pkg-config` in cross-compilation without
+//! appropriate sysroot and search paths set is likely to break builds.
 //!
 //! # Example
 //!
