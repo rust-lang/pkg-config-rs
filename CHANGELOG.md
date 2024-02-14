@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.30] - 2024-02-14
+
+### Changed
+
+- Update documentation for cross-compilation (#161).
+
+- Update GitHub Action CI (#160).
+
 ## [0.3.29] - 2024-01-17
 
 ### Fixed
