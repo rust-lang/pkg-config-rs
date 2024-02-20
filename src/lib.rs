@@ -847,13 +847,11 @@ impl Library {
     }
 
     fn parse_libs_cflags(&mut self, name: &str, output: &[u8], config: &Config) {
-        let mut is_msvc = false;
         let target = env::var("TARGET");
-        if let Ok(target) = &target {
-            if target.contains("msvc") {
-                is_msvc = true;
-            }
-        }
+        let is_msvc = target
+            .as_ref()
+            .map(|target| target.contains("msvc"))
+            .unwrap_or(false);
 
         let system_roots = if cfg!(target_os = "macos") {
             vec![PathBuf::from("/Library"), PathBuf::from("/System")]
