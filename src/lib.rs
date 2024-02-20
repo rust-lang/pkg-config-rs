@@ -850,7 +850,8 @@ impl Library {
         let target = env::var("TARGET");
         let is_msvc = target
             .as_ref()
-            .map_or(false, |target| target.contains("msvc"));
+            .map(|target| target.contains("msvc"))
+            .unwrap_or(false);
 
         let system_roots = if cfg!(target_os = "macos") {
             vec![PathBuf::from("/Library"), PathBuf::from("/System")]
