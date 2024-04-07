@@ -37,3 +37,28 @@ jobs:
         cargo build --verbose
     - run: |
         cargo test --verbose
+  windows_build:
+    name: windows ${{ matrix.rust }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - 1.30.0
+          - stable
+          - beta
+          - nightly
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+    - run: rustup component add rustfmt-preview
+    - run: |
+        cargo build --verbose
+    - name: cargo test
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri "https://github.com/mesonbuild/cidata/raw/master/win32/pkg-config.exe" -OutFile pkg-config.exe
+        $env:PATH += ";$PWD"
+        cargo test --verbose
