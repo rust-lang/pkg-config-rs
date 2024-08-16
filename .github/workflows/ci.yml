@@ -27,12 +27,11 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
-    - run: rustup component add rustfmt-preview
-    - name: cargo fmt --all -- --check if stable
+    - name: cargo fmt --all -- --check
       run: |
-        if [ "${{ matrix.rust }}" = "stable" ]; then
-          cargo fmt --all -- --check
-        fi
+        rustup component add rustfmt-preview
+        cargo fmt --all -- --check
+      if: matrix.rust == 'stable'
     - run: |
         cargo build --verbose
     - run: |
