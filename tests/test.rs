@@ -1,7 +1,4 @@
-extern crate pkg_config;
-#[macro_use]
-extern crate lazy_static;
-
+use lazy_static::lazy_static;
 use pkg_config::Error;
 use std::env;
 use std::path::PathBuf;
