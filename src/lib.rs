@@ -259,14 +259,14 @@ impl Display for WrappedCommand {
 impl error::Error for Error {}
 
 impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         // Failed `unwrap()` prints Debug representation, but the default debug format lacks helpful instructions for the end users
         <Error as fmt::Display>::fmt(self, f)
     }
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match *self {
             Error::EnvNoPkgConfig(ref name) => write!(f, "Aborted because {} is set", name),
             Error::CrossCompilation => f.write_str(
@@ -407,7 +407,7 @@ impl fmt::Display for Error {
     }
 }
 
-fn format_output(output: &Output, f: &mut fmt::Formatter) -> fmt::Result {
+fn format_output(output: &Output, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let stdout = String::from_utf8_lossy(&output.stdout);
     if !stdout.is_empty() {
         write!(f, "\n--- stdout\n{}", stdout)?;

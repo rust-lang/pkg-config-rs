@@ -1,7 +1,7 @@
 # pkg-config-rs
 
 [![Build Status](https://github.com/rust-lang/pkg-config-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rust-lang/pkg-config-rs/actions)
-[![Rust](https://img.shields.io/badge/rust-1.30%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/pkg-config-rs/)
+[![Rust](https://img.shields.io/badge/rust-1.31%2B-blue.svg?maxAge=3600)](https://github.com/rust-lang/pkg-config-rs/)
 
 [Documentation](https://docs.rs/pkg-config)
 
@@ -13,7 +13,7 @@ You can use this crate directly to probe for specific libraries, or use
 [system-deps](https://github.com/gdesmott/system-deps) to declare all your
 `pkg-config` dependencies in `Cargo.toml`.
 
-This library requires Rust 1.30+.
+This library requires Rust 1.31+.
 
 # Example
 

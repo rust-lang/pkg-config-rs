@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         rust:
-          - 1.30.0
+          - 1.31.0
           - stable
           - beta
           - nightly
@@ -27,12 +27,14 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
-    - run: rustup component add rustfmt-preview
-    - name: cargo fmt --all -- --check if stable
+    - name: Use MSRV Cargo.lock
+      run: cp Cargo.lock.msrv Cargo.lock
+      if: matrix.rust == '1.31.0'
+    - name: cargo fmt --all -- --check
       run: |
-        if [ "${{ matrix.rust }}" = "stable" ]; then
-          cargo fmt --all -- --check
-        fi
+        rustup component add rustfmt-preview
+        cargo fmt --all -- --check
+      if: matrix.rust == 'stable'
     - run: |
         cargo build --verbose
     - run: |
