@@ -27,6 +27,9 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
+    - name: Use MSRV Cargo.lock
+      run: cp Cargo.lock.msrv Cargo.lock
+      if: matrix.rust == '1.31.0'
     - name: cargo fmt --all -- --check
       run: |
         rustup component add rustfmt-preview
