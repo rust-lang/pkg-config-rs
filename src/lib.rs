@@ -427,6 +427,62 @@ impl fmt::Display for Error {
     }
 }
 
+impl Error {
+    /// Returns a concise version of the error message
+    pub fn error_message(&self) -> String {
+        // Extracts just the command name from WrappedCommand's output.
+        // The command name alone is not available in the Error enum.
+        fn trimmed_command(command: &str) -> &str {
+            let env_prefix = command
+                .split_inclusive(' ')
+                .take_while(|arg| arg.starts_with("PKG_CONFIG") && arg.contains('='))
+                .map(|arg| arg.len())
+                .sum::<usize>();
+            command[env_prefix..].split(" --").next().unwrap()
+        }
+
+        match self {
+            Error::Command { command, cause } => match cause.kind() {
+                io::ErrorKind::NotFound => {
+                    format!(
+                        "`{}` command not found. Is pkg-config installed?",
+                        trimmed_command(command)
+                    )
+                }
+                _ => format!(
+                    "Could not run `{}` command, because {}",
+                    trimmed_command(command),
+                    cause
+                ),
+            },
+            Error::Failure { command, output } => {
+                format!(
+                    "Command `{}` failed with {}",
+                    trimmed_command(command),
+                    output.status
+                )
+            }
+            Error::ProbeFailure {
+                name,
+                command,
+                output,
+            } => format!(
+                "The system library `{}` was not found, because command `{}` failed with {}",
+                name,
+                trimmed_command(command),
+                output.status
+            ),
+            Error::EnvNoPkgConfig(var) => {
+                format!("pkg-config has been disabled via {} env var", var)
+            }
+            Error::CrossCompilation => {
+                format!("pkg-config has not been set up to support cross-compilation")
+            }
+            _ => self.to_string(),
+        }
+    }
+}
+
 fn format_output(output: &Output, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let stdout = String::from_utf8_lossy(&output.stdout);
     if !stdout.is_empty() {
