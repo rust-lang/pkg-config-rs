@@ -434,9 +434,9 @@ impl Error {
         // The command name alone is not available in the Error enum.
         fn trimmed_command(command: &str) -> &str {
             let env_prefix = command
-                .split_inclusive(' ')
+                .split(' ')
                 .take_while(|arg| arg.starts_with("PKG_CONFIG") && arg.contains('='))
-                .map(|arg| arg.len())
+                .map(|arg| arg.len() + 1)
                 .sum::<usize>();
             command[env_prefix..].split(" --").next().unwrap()
         }
