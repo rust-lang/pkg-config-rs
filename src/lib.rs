@@ -501,6 +501,15 @@ pub fn find_library(name: &str) -> Result<Library, String> {
     probe_library(name).map_err(|e| e.to_string())
 }
 
+/// Simple shortcut for using all default options for finding a library,
+/// and exiting the build script with a verbose error message on failure.
+///
+/// This is preferred over `probe_library().unwrap()`, because it can
+/// print a more readable output.
+pub fn probe_library_or_exit(name: &str) -> Library {
+    Config::new().probe_or_exit(name)
+}
+
 /// Simple shortcut for using all default options for finding a library.
 pub fn probe_library(name: &str) -> Result<Library, Error> {
     Config::new().probe(name)
@@ -540,6 +549,21 @@ impl Config {
             cargo_metadata: true,
             env_metadata: true,
             metadata_buffer: None,
+        }
+    }
+
+    /// Clone the Config, with output buffering enabled
+    fn with_metadata_buffer(&self) -> Config {
+        Config {
+            statik: self.statik,
+            min_version: self.min_version.clone(),
+            max_version: self.max_version.clone(),
+            extra_args: self.extra_args.clone(),
+            print_system_cflags: self.print_system_cflags,
+            print_system_libs: self.print_system_libs,
+            cargo_metadata: self.cargo_metadata,
+            env_metadata: self.env_metadata,
+            metadata_buffer: Some(Mutex::default()),
         }
     }
 
@@ -638,6 +662,34 @@ impl Config {
     #[doc(hidden)]
     pub fn find(&self, name: &str) -> Result<Library, String> {
         self.probe(name).map_err(|e| e.to_string())
+    }
+
+    /// Run `pkg-config` to find the library `name`, or exit the
+    /// build script with a verbose error.
+    ///
+    /// This is preferred over `probe().unwrap()`, because it can
+    /// print a more readable error.
+    ///
+    /// This will use all configuration previously set to specify how
+    /// `pkg-config` is run.
+    pub fn probe_or_exit(&self, name: &str) -> Library {
+        let buffered = self.with_metadata_buffer();
+        match buffered.probe(name) {
+            Ok(lib) => {
+                buffered.print_bufferred();
+                lib
+            }
+            Err(err) => {
+                println!(
+                    "cargo:warning={}",
+                    err.error_message().replace("\n", "\ncargo:warning=")
+                );
+                eprintln!("{}", err);
+
+                // The same error code as a panic, but it won't print an irrelevant backtrace
+                std::process::exit(101);
+            }
+        }
     }
 
     /// Run `pkg-config` to find the library `name`.
