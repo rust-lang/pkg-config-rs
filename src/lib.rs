@@ -906,7 +906,7 @@ impl Library {
 
                     if val.starts_with(':') {
                         // Pass this flag to linker directly.
-                        let meta = format!("cargo:rustc-link-arg={}{}", flag, val);
+                        let meta = format!("rustc-link-arg={}{}", flag, val);
                         config.print_metadata(&meta);
                     } else if statik && is_static_available(val, &system_roots, &dirs) {
                         let meta = format!("rustc-link-lib=static={}", val);
