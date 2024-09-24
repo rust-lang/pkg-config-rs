@@ -652,6 +652,77 @@ impl Config {
         self.statik.unwrap_or_else(|| self.infer_static(name))
     }
 
+    #[cfg(windows)]
+    fn find_pkg_config_in(&self, mut path: PathBuf, pathexts: &[OsString]) -> Option<OsString> {
+        path.push("pkg-config");
+        for pathext in pathexts {
+            path.set_extension(pathext);
+            if !path.is_file() {
+                return None;
+            }
+            // Strawberry Perl's pkg-config is pkg-config.bat
+            if pathext.eq_ignore_ascii_case("bat") {
+                let mut cmd = Command::new(path.as_os_str());
+                let out = match cmd.arg("--help").output() {
+                    Ok(o) => o,
+                    Err(e) => {
+                        eprintln!("Ignoring unusable pkg-config ({:?}): {:?}", path, e);
+                        return None;
+                    }
+                };
+                if let Ok(out) = str::from_utf8(&out.stdout) {
+                    if out.contains("Pure-Perl") {
+                        eprintln!("Ignoring Strawberry Perl pkg-config: {:?}", path);
+                        return None;
+                    }
+                }
+            }
+        }
+        Some(path.into_os_string())
+    }
+
+    fn pkg_config_from_path(&self) -> OsString {
+        #[cfg(windows)]
+        {
+            // Resolve pkg-config in PATH to find the absolute path to pkg-config that we should
+            // use, so that we can skip Strawberry Perl's pure-perl implementation of pkg-config.
+            // Despite its presence in PATH, the implementation is for internal use and not meant
+            // to be used as a MinGW distribution.
+            use std::os::windows::prelude::*;
+            let pathexts = env::var_os("PATHEXT").map_or_else(
+                || {
+                    ["COM", "EXE", "BAT"]
+                        .iter()
+                        .map(|v| OsStr::new(v).to_owned())
+                        .collect::<Vec<_>>()
+                },
+                |v| {
+                    env::split_paths(&v)
+                        // PATHEXT is a list of .EXT but we want EXT
+                        .map(|v| {
+                            OsString::from_wide(
+                                &v.as_os_str().encode_wide().skip(1).collect::<Vec<u16>>(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                },
+            );
+            // Windows first searches for the specified command in the current directory,
+            // regardless of the value of PATH.
+            if let Some(ret) = self.find_pkg_config_in(".".into(), &pathexts) {
+                return ret;
+            }
+            if let Some(paths) = env::var_os("PATH") {
+                for path in env::split_paths(&paths) {
+                    if let Some(ret) = self.find_pkg_config_in(path, &pathexts) {
+                        return ret;
+                    }
+                }
+            }
+        }
+        OsString::from("pkg-config")
+    }
+
     fn run(&self, name: &str, args: &[&str]) -> Result<Vec<u8>, Error> {
         let pkg_config_exe = self.targeted_env_var("PKG_CONFIG");
         let fallback_exe = if pkg_config_exe.is_none() {
@@ -659,7 +730,7 @@ impl Config {
         } else {
             None
         };
-        let exe = pkg_config_exe.unwrap_or_else(|| OsString::from("pkg-config"));
+        let exe = pkg_config_exe.unwrap_or_else(|| self.pkg_config_from_path());
 
         let mut cmd = self.command(exe, name, args);
 
