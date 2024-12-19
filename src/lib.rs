@@ -286,7 +286,7 @@ impl fmt::Display for Error {
                         let crate_name =
                             std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "sys".to_owned());
                         let instructions = if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
-                            "Try `brew install pkg-config` if you have Homebrew.\n"
+                            "Try `brew install pkgconf` if you have Homebrew.\n"
                         } else if cfg!(unix) {
                             "Try `apt install pkg-config`, or `yum install pkg-config`,\n\
                             or `pkg install pkg-config`, or `apk add pkgconfig` \
