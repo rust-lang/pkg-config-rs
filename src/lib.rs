@@ -287,6 +287,8 @@ impl fmt::Display for Error {
                             std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "sys".to_owned());
                         let instructions = if cfg!(target_os = "macos") {
                             "Try `brew install pkgconf` if you have Homebrew.\n"
+                        } else if cfg!(target_os = "ios") {
+                            "" // iOS cross-compilation requires a custom setup, no easy fix
                         } else if cfg!(unix) {
                             "Try `apt install pkg-config`, or `yum install pkg-config`,\n\
                             or `pkg install pkg-config`, or `apk add pkgconfig` \
