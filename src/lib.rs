@@ -290,7 +290,7 @@ impl fmt::Display for Error {
                         } else if cfg!(target_os = "ios") {
                             "" // iOS cross-compilation requires a custom setup, no easy fix
                         } else if cfg!(unix) {
-                            "Try `apt install pkg-config`, or `yum install pkg-config`,\n\
+                            "Try `apt install pkg-config`, or `yum install pkg-config`, or `brew install pkgconf`\n\
                             or `pkg install pkg-config`, or `apk add pkgconfig` \
                             depending on your distribution.\n"
                         } else {
