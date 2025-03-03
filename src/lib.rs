@@ -565,7 +565,7 @@ impl Config {
         self
     }
 
-    /// Deprecated in favor fo the `probe` function
+    /// Deprecated in favor of the `probe` function
     #[doc(hidden)]
     pub fn find(&self, name: &str) -> Result<Library, String> {
         self.probe(name).map_err(|e| e.to_string())
