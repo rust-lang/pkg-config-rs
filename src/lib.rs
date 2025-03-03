@@ -89,12 +89,14 @@ use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
+use std::fmt::Arguments;
 use std::fmt::Display;
 use std::io;
 use std::ops::{Bound, RangeBounds};
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::str;
+use std::sync::Mutex;
 
 /// Wrapper struct to polyfill methods introduced in 1.57 (`get_envs`, `get_args` etc).
 /// This is needed to reconstruct the pkg-config command for output in a copy-
@@ -106,7 +108,7 @@ struct WrappedCommand {
     args: Vec<OsString>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Config {
     statik: Option<bool>,
     min_version: Bound<String>,
@@ -116,6 +118,24 @@ pub struct Config {
     env_metadata: bool,
     print_system_libs: bool,
     print_system_cflags: bool,
+    /// If `Some`, cargo directives will be buffered instead of being printed directly
+    metadata_buffer: Option<Mutex<Vec<String>>>,
+}
+
+impl Clone for Config {
+    fn clone(&self) -> Config {
+        Config {
+            statik: self.statik,
+            min_version: self.min_version.clone(),
+            max_version: self.max_version.clone(),
+            extra_args: self.extra_args.clone(),
+            print_system_cflags: self.print_system_cflags,
+            print_system_libs: self.print_system_libs,
+            cargo_metadata: self.cargo_metadata,
+            env_metadata: self.env_metadata,
+            metadata_buffer: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -424,6 +444,62 @@ impl fmt::Display for Error {
     }
 }
 
+impl Error {
+    /// Returns a concise version of the error message
+    pub fn error_message(&self) -> String {
+        // Extracts just the command name from WrappedCommand's output.
+        // The command name alone is not available in the Error enum.
+        fn trimmed_command(command: &str) -> &str {
+            let env_prefix = command
+                .split(' ')
+                .take_while(|arg| arg.starts_with("PKG_CONFIG") && arg.contains('='))
+                .map(|arg| arg.len() + 1)
+                .sum::<usize>();
+            command[env_prefix..].split(" --").next().unwrap()
+        }
+
+        match self {
+            Error::Command { command, cause } => match cause.kind() {
+                io::ErrorKind::NotFound => {
+                    format!(
+                        "`{}` command not found. Is pkg-config installed?",
+                        trimmed_command(command)
+                    )
+                }
+                _ => format!(
+                    "Could not run `{}` command, because {}",
+                    trimmed_command(command),
+                    cause
+                ),
+            },
+            Error::Failure { command, output } => {
+                format!(
+                    "Command `{}` failed with {}",
+                    trimmed_command(command),
+                    output.status
+                )
+            }
+            Error::ProbeFailure {
+                name,
+                command,
+                output,
+            } => format!(
+                "The system library `{}` was not found, because command `{}` failed with {}",
+                name,
+                trimmed_command(command),
+                output.status
+            ),
+            Error::EnvNoPkgConfig(var) => {
+                format!("pkg-config has been disabled via {} env var", var)
+            }
+            Error::CrossCompilation => {
+                format!("pkg-config has not been set up to support cross-compilation")
+            }
+            _ => self.to_string(),
+        }
+    }
+}
+
 fn format_output(output: &Output, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let stdout = String::from_utf8_lossy(&output.stdout);
     if !stdout.is_empty() {
@@ -440,6 +516,15 @@ fn format_output(output: &Output, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 #[doc(hidden)]
 pub fn find_library(name: &str) -> Result<Library, String> {
     probe_library(name).map_err(|e| e.to_string())
+}
+
+/// Simple shortcut for using all default options for finding a library,
+/// and exiting the build script with a verbose error message on failure.
+///
+/// This is preferred over `probe_library().unwrap()`, because it can
+/// print a more readable output.
+pub fn probe_library_or_exit(name: &str) -> Library {
+    Config::new().probe_or_exit(name)
 }
 
 /// Simple shortcut for using all default options for finding a library.
@@ -480,6 +565,31 @@ impl Config {
             print_system_libs: true,
             cargo_metadata: true,
             env_metadata: true,
+            metadata_buffer: None,
+        }
+    }
+
+    /// Clone the Config, with output buffering enabled
+    fn with_metadata_buffer(&self) -> Config {
+        Config {
+            statik: self.statik,
+            min_version: self.min_version.clone(),
+            max_version: self.max_version.clone(),
+            extra_args: self.extra_args.clone(),
+            print_system_cflags: self.print_system_cflags,
+            print_system_libs: self.print_system_libs,
+            cargo_metadata: self.cargo_metadata,
+            env_metadata: self.env_metadata,
+            metadata_buffer: Some(Mutex::default()),
+        }
+    }
+
+    /// Emit buffered metadata, if any
+    fn print_bufferred(&self) {
+        if let Some(mut buf) = self.metadata_buffer.as_ref().and_then(|m| m.lock().ok()) {
+            for line in buf.drain(..) {
+                println!("cargo:{}", line);
+            }
         }
     }
 
@@ -571,6 +681,34 @@ impl Config {
         self.probe(name).map_err(|e| e.to_string())
     }
 
+    /// Run `pkg-config` to find the library `name`, or exit the
+    /// build script with a verbose error.
+    ///
+    /// This is preferred over `probe().unwrap()`, because it can
+    /// print a more readable error.
+    ///
+    /// This will use all configuration previously set to specify how
+    /// `pkg-config` is run.
+    pub fn probe_or_exit(&self, name: &str) -> Library {
+        let buffered = self.with_metadata_buffer();
+        match buffered.probe(name) {
+            Ok(lib) => {
+                buffered.print_bufferred();
+                lib
+            }
+            Err(err) => {
+                println!(
+                    "cargo:warning={}",
+                    err.error_message().replace("\n", "\ncargo:warning=")
+                );
+                eprintln!("{}", err);
+
+                // The same error code as a panic, but it won't print an irrelevant backtrace
+                std::process::exit(101);
+            }
+        }
+    }
+
     /// Run `pkg-config` to find the library `name`.
     ///
     /// This will use all configuration previously set to specify how
@@ -660,9 +798,17 @@ impl Config {
 
     fn env_var_os(&self, name: &str) -> Option<OsString> {
         if self.env_metadata {
-            println!("cargo:rerun-if-env-changed={}", name);
+            self.emit_cargo_directive(format_args!("rerun-if-env-changed={}", name));
         }
         env::var_os(name)
+    }
+
+    fn emit_cargo_directive(&self, fmt: Arguments) {
+        if let Some(mut buf) = self.metadata_buffer.as_ref().and_then(|m| m.lock().ok()) {
+            buf.push(fmt.to_string());
+        } else {
+            println!("cargo:{}", fmt);
+        }
     }
 
     fn is_static(&self, name: &str) -> bool {
@@ -750,7 +896,7 @@ impl Config {
 
     fn print_metadata(&self, s: &str) {
         if self.cargo_metadata {
-            println!("cargo:{}", s);
+            self.emit_cargo_directive(format_args!("{}", s));
         }
     }
 
@@ -782,6 +928,7 @@ impl Default for Config {
             print_system_libs: false,
             cargo_metadata: false,
             env_metadata: false,
+            metadata_buffer: None,
         }
     }
 }
