@@ -300,10 +300,12 @@ impl fmt::Display for Error {
                     io::ErrorKind::NotFound => {
                         let crate_name =
                             std::env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "sys".to_owned());
-                        let instructions = if cfg!(target_os = "macos") || cfg!(target_os = "ios") {
-                            "Try `brew install pkg-config` if you have Homebrew.\n"
+                        let instructions = if cfg!(target_os = "macos") {
+                            "Try `brew install pkgconf` if you have Homebrew.\n"
+                        } else if cfg!(target_os = "ios") {
+                            "" // iOS cross-compilation requires a custom setup, no easy fix
                         } else if cfg!(unix) {
-                            "Try `apt install pkg-config`, or `yum install pkg-config`,\n\
+                            "Try `apt install pkg-config`, or `yum install pkg-config`, or `brew install pkgconf`\n\
                             or `pkg install pkg-config`, or `apk add pkgconfig` \
                             depending on your distribution.\n"
                         } else {
