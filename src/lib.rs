@@ -116,6 +116,7 @@ pub struct Config {
     env_metadata: bool,
     print_system_libs: bool,
     print_system_cflags: bool,
+    probe_cflags: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -480,6 +481,7 @@ impl Config {
             print_system_libs: true,
             cargo_metadata: true,
             env_metadata: true,
+            probe_cflags: true,
         }
     }
 
@@ -565,6 +567,14 @@ impl Config {
         self
     }
 
+    /// Enable or disable passing `--cflags` to `pkg-config`.
+    ///
+    /// This is enabled by default.
+    pub fn probe_cflags(&mut self, probe: bool) -> &mut Config {
+        self.probe_cflags = probe;
+        self
+    }
+
     /// Deprecated in favor of the `probe` function
     #[doc(hidden)]
     pub fn find(&self, name: &str) -> Result<Library, String> {
@@ -585,16 +595,19 @@ impl Config {
 
         let mut library = Library::new();
 
-        let output = self
-            .run(name, &["--libs", "--cflags"])
-            .map_err(|e| match e {
-                Error::Failure { command, output } => Error::ProbeFailure {
-                    name: name.to_owned(),
-                    command,
-                    output,
-                },
-                other => other,
-            })?;
+        let mut args = vec!["--libs"];
+        if self.probe_cflags {
+            args.push("--cflags");
+        }
+
+        let output = self.run(name, &args).map_err(|e| match e {
+            Error::Failure { command, output } => Error::ProbeFailure {
+                name: name.to_owned(),
+                command,
+                output,
+            },
+            other => other,
+        })?;
         library.parse_libs_cflags(name, &output, self);
 
         let output = self.run(name, &["--modversion"])?;
@@ -782,6 +795,7 @@ impl Default for Config {
             print_system_libs: false,
             cargo_metadata: false,
             env_metadata: false,
+            probe_cflags: false,
         }
     }
 }
