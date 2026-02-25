@@ -84,7 +84,7 @@
 
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
@@ -894,6 +894,9 @@ impl Library {
 
         let words = split_flags(output);
 
+        let mut whole_archive_depth = 0;
+        let mut added_libs = HashSet::new();
+
         // Handle single-character arguments like `-I/usr/include`
         let parts = words
             .iter()
@@ -921,17 +924,42 @@ impl Library {
                         continue;
                     }
 
-                    if val.starts_with(':') {
-                        // Pass this flag to linker directly.
-                        let meta = format!("rustc-link-arg={}{}", flag, val);
-                        config.print_metadata(&meta);
-                    } else if statik && is_static_available(val, &system_roots, &dirs) {
-                        let meta = format!("rustc-link-lib=static={}", val);
-                        config.print_metadata(&meta);
+                    // static libraries with +whole-archive only
+                    let whole_archive = statik && whole_archive_depth > 0;
+
+                    // if full library name is provided (-l:), but it is in a valid lib<name>.a
+                    // format, the name can be normalised
+                    let val = if val.starts_with(":lib") && val.ends_with(".a") && whole_archive {
+                        // this would be cleaner with an if-let chain of strip_prefix and
+                        // strip_suffix, and would be "safer" without random slicing
+                        &val[4..val.len() - 2]
                     } else {
-                        let meta = format!("rustc-link-lib={}", val);
-                        config.print_metadata(&meta);
+                        val
+                    };
+
+                    // adding a library multiple times with different modifiers is not allowed by
+                    // rustc, but can be allowed by c compilers
+                    if added_libs.contains(&val) {
+                        continue;
                     }
+
+                    let meta = if val.starts_with(':') {
+                        // Pass this flag to linker directly.
+                        format!("rustc-link-arg={}{}", flag, val)
+                    } else {
+                        let static_available = is_static_available(val, &system_roots, &dirs);
+                        added_libs.insert(val);
+
+                        if whole_archive && static_available {
+                            format!("rustc-link-lib=static:+whole-archive={}", val)
+                        } else if statik && static_available {
+                            format!("rustc-link-lib=static={}", val)
+                        } else {
+                            format!("rustc-link-lib={}", val)
+                        }
+                    };
+
+                    config.print_metadata(&meta);
 
                     self.libs.push(val.to_string());
                 }
@@ -946,6 +974,19 @@ impl Library {
                     let meta = format!("rustc-link-arg=-Wl,-u,{}", val);
                     config.print_metadata(&meta);
                 }
+                "-W" => {
+                    if val.starts_with("l,") {
+                        // effectively `if let Some(val) = val.strip_prefix("l,") {}`
+                        let val = &val[2..];
+
+                        if val == "--whole-archive" {
+                            whole_archive_depth += 1;
+                        } else if val == "--no-whole-archive" && whole_archive_depth > 0 {
+                            whole_archive_depth -= 1;
+                        }
+                    }
+                }
+
                 _ => {}
             }
         }
