@@ -816,7 +816,7 @@ impl Library {
 
     /// Extract the &str to pass to cargo:rustc-link-lib from a filename (just the file name, not including directories)
     /// using target-specific logic.
-    fn extract_lib_from_filename<'a>(target: &str, filename: &'a str) -> Option<&'a str> {
+    pub fn extract_lib_from_filename<'a>(target: &str, filename: &'a str) -> Option<&'a str> {
         fn test_suffixes<'b>(filename: &'b str, suffixes: &[&str]) -> Option<&'b str> {
             for suffix in suffixes {
                 if filename.ends_with(suffix) {
