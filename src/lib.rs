@@ -351,6 +351,18 @@ impl fmt::Display for Error {
                 // Give the command run so users can reproduce the error
                 writeln!(f, "> {}\n", command)?;
 
+                // Show pkg-config's own error output, this often contains the
+                // actual reason for the failure (e.g. a missing transitive
+                // dependency) which is more specific than our generic message.
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.is_empty() {
+                    writeln!(f, "pkg-config output:")?;
+                    for line in stderr.lines() {
+                        writeln!(f, "  {}", line)?;
+                    }
+                    writeln!(f)?;
+                }
+
                 // Explain how it was caused
                 writeln!(
                     f,
