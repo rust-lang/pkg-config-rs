@@ -317,6 +317,17 @@ fn rpath() {
 }
 
 #[test]
+fn duplicate() {
+    let _g = LOCK.lock();
+    reset();
+    let lib = find("duplicate").unwrap();
+
+    let lib_count = lib.libs.iter().filter(|&l| l == "rpath").count();
+
+    assert_eq!(lib_count, 1);
+}
+
+#[test]
 fn whole_archive() {
     let _g = LOCK.lock();
     reset();
