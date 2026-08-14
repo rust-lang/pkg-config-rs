@@ -937,6 +937,12 @@ impl Library {
                         val
                     };
 
+                    // adding a library multiple times with different modifiers is not allowed by
+                    // rustc, but can be allowed by c compilers
+                    if added_libs.contains(&val) {
+                        continue;
+                    }
+
                     let meta = if val.starts_with(':') {
                         // Pass this flag to linker directly.
                         format!("rustc-link-arg={}{}", flag, val)
