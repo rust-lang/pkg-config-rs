@@ -950,7 +950,7 @@ impl Library {
                         let static_available = is_static_available(val, &system_roots, &dirs);
                         added_libs.insert(val);
 
-                        if whole_archive && static_available {
+                        if whole_archive {
                             push_to_whole_archive = true;
                             format!("rustc-link-lib=static:+whole-archive={}", val)
                         } else if statik && static_available {
