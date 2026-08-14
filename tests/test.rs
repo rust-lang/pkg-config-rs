@@ -315,3 +315,16 @@ fn rpath() {
         .ld_args
         .contains(&vec!["-rpath".to_string(), "/usr/local/lib".to_string(),]));
 }
+
+#[test]
+fn whole_archive() {
+    let _g = LOCK.lock();
+    reset();
+
+    let lib = pkg_config::Config::new()
+        .statik(true)
+        .probe("wholearchive")
+        .unwrap();
+
+    assert_eq!(lib.whole_archive_libs, &["rte_eal"]);
+}

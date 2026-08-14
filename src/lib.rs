@@ -122,6 +122,8 @@ pub struct Config {
 pub struct Library {
     /// Libraries specified by -l
     pub libs: Vec<String>,
+    /// Libraries which are to be included with --whole-archive
+    pub whole_archive_libs: Vec<String>,
     /// Library search paths specified by -L
     pub link_paths: Vec<PathBuf>,
     /// Library file paths specified without -l
@@ -790,6 +792,7 @@ impl Library {
     fn new() -> Library {
         Library {
             libs: Vec::new(),
+            whole_archive_libs: Vec::new(),
             link_paths: Vec::new(),
             link_files: Vec::new(),
             include_paths: Vec::new(),
@@ -939,6 +942,7 @@ impl Library {
                         continue;
                     }
 
+                    let mut push_to_whole_archive = false;
                     let meta = if val.starts_with(':') {
                         // Pass this flag to linker directly.
                         format!("rustc-link-arg={}{}", flag, val)
@@ -947,6 +951,7 @@ impl Library {
                         added_libs.insert(val);
 
                         if whole_archive && static_available {
+                            push_to_whole_archive = true;
                             format!("rustc-link-lib=static:+whole-archive={}", val)
                         } else if statik && static_available {
                             format!("rustc-link-lib=static={}", val)
@@ -957,7 +962,11 @@ impl Library {
 
                     config.print_metadata(&meta);
 
-                    self.libs.push(val.to_string());
+                    if push_to_whole_archive {
+                        self.whole_archive_libs.push(val.to_string());
+                    } else {
+                        self.libs.push(val.to_string());
+                    }
                 }
                 "-D" => {
                     let mut iter = val.split('=');
