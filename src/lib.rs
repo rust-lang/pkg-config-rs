@@ -145,6 +145,7 @@ pub struct Library {
 }
 
 /// Represents all reasons `pkg-config` might not succeed or be run at all.
+#[non_exhaustive]
 pub enum Error {
     /// Aborted because of `*_NO_PKG_CONFIG` environment variable.
     ///
@@ -176,10 +177,6 @@ pub enum Error {
         command: String,
         output: Output,
     },
-
-    #[doc(hidden)]
-    // please don't match on this, we're likely to add more variants over time
-    __Nonexhaustive,
 }
 
 impl WrappedCommand {
@@ -337,7 +334,7 @@ impl fmt::Display for Error {
                 let crate_name =
                     env::var("CARGO_PKG_NAME").unwrap_or(String::from("<NO CRATE NAME>"));
 
-                writeln!(f, "")?;
+                writeln!(f)?;
 
                 // Give a short explanation of what the error is
                 writeln!(
@@ -432,7 +429,6 @@ impl fmt::Display for Error {
                 )?;
                 format_output(output, f)
             }
-            Error::__Nonexhaustive => panic!(),
         }
     }
 }
@@ -754,19 +750,19 @@ impl Config {
         cmd.arg(name);
         match self.min_version {
             Bound::Included(ref version) => {
-                cmd.arg(&format!("{} >= {}", name, version));
+                cmd.arg(format!("{} >= {}", name, version));
             }
             Bound::Excluded(ref version) => {
-                cmd.arg(&format!("{} > {}", name, version));
+                cmd.arg(format!("{} > {}", name, version));
             }
             _ => (),
         }
         match self.max_version {
             Bound::Included(ref version) => {
-                cmd.arg(&format!("{} <= {}", name, version));
+                cmd.arg(format!("{} <= {}", name, version));
             }
             Bound::Excluded(ref version) => {
-                cmd.arg(&format!("{} < {}", name, version));
+                cmd.arg(format!("{} < {}", name, version));
             }
             _ => (),
         }
@@ -833,8 +829,8 @@ impl Library {
     pub fn extract_lib_from_filename<'a>(target: &str, filename: &'a str) -> Option<&'a str> {
         fn test_suffixes<'b>(filename: &'b str, suffixes: &[&str]) -> Option<&'b str> {
             for suffix in suffixes {
-                if filename.ends_with(suffix) {
-                    return Some(&filename[..filename.len() - suffix.len()]);
+                if let Some(lib) = filename.strip_suffix(suffix) {
+                    return Some(lib);
                 }
             }
             None
@@ -853,7 +849,7 @@ impl Library {
                 // the `lib` prefix from the filename. The `.a` suffix *requires* the `lib` prefix.
                 // https://sourceware.org/binutils/docs-2.39/ld.html#index-direct-linking-to-a-dll
                 let filename = &filename[prefix.len()..];
-                return test_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"]);
+                test_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"])
             } else {
                 // According to link.exe documentation:
                 // https://learn.microsoft.com/en-us/cpp/build/reference/link-input-files?view=msvc-170
@@ -872,20 +868,18 @@ impl Library {
                 // See:
                 // https://github.com/mesonbuild/meson/issues/8153
                 // https://github.com/rust-lang/rust/issues/114013
-                return test_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"]);
+                test_suffixes(filename, &[".dll.a", ".dll", ".lib", ".a"])
             }
         } else if target.contains("apple") {
-            if filename.starts_with(prefix) {
-                let filename = &filename[prefix.len()..];
+            if let Some(filename) = filename.strip_prefix(prefix) {
                 return test_suffixes(filename, &[".a", ".so", ".dylib"]);
             }
-            return None;
+            None
         } else {
-            if filename.starts_with(prefix) {
-                let filename = &filename[prefix.len()..];
+            if let Some(filename) = filename.strip_prefix(prefix) {
                 return test_suffixes(filename, &[".a", ".so"]);
             }
-            return None;
+            None
         }
     }
 
@@ -978,8 +972,8 @@ impl Library {
 
         // Handle multi-character arguments with space-separated value like `-framework foo`
         let mut iter = words.iter().flat_map(|arg| {
-            if arg.starts_with("-Wl,") {
-                arg[4..].split(',').collect()
+            if let Some(arg) = arg.strip_prefix("-Wl,") {
+                arg.split(',').collect()
             } else {
                 vec![arg.as_ref()]
             }
@@ -1088,7 +1082,7 @@ fn is_static_available(name: &str, system_roots: &[PathBuf], dirs: &[PathBuf]) -
     };
 
     dirs.iter().any(|dir| {
-        let library_exists = libnames.iter().any(|libname| dir.join(&libname).exists());
+        let library_exists = libnames.iter().any(|libname| dir.join(libname).exists());
         library_exists && !system_roots.iter().any(|sys| dir.starts_with(sys))
     })
 }
