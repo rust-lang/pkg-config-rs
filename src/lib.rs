@@ -927,15 +927,11 @@ impl Library {
                     // static libraries with +whole-archive only
                     let whole_archive = statik && whole_archive_depth > 0;
 
-                    // if full library name is provided (-l:), but it is in a valid lib<name>.a
-                    // format, the name can be normalised
-                    let val = if val.starts_with(":lib") && val.ends_with(".a") && whole_archive {
-                        // this would be cleaner with an if-let chain of strip_prefix and
-                        // strip_suffix, and would be "safer" without random slicing
-                        &val[4..val.len() - 2]
-                    } else {
-                        val
-                    };
+                    let val = whole_archive
+                        .then_some(val)
+                        .and_then(|val| val.strip_prefix(":lib"))
+                        .and_then(|val| val.strip_suffix(".a"))
+                        .unwrap_or(val);
 
                     // adding a library multiple times with different modifiers is not allowed by
                     // rustc, but can be allowed by c compilers
@@ -975,10 +971,7 @@ impl Library {
                     config.print_metadata(&meta);
                 }
                 "-W" => {
-                    if val.starts_with("l,") {
-                        // effectively `if let Some(val) = val.strip_prefix("l,") {}`
-                        let val = &val[2..];
-
+                    if let Some(val) = val.strip_prefix("l,") {
                         if val == "--whole-archive" {
                             whole_archive_depth += 1;
                         } else if val == "--no-whole-archive" && whole_archive_depth > 0 {
