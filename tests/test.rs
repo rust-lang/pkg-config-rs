@@ -312,3 +312,14 @@ fn rpath() {
         .ld_args
         .contains(&vec!["-rpath".to_string(), "/usr/local/lib".to_string(),]));
 }
+
+#[test]
+fn libs_file_path_records_the_archive() {
+    let _g = LOCK.lock();
+    reset();
+    env::set_var("TARGET", "x86_64-unknown-linux-gnu");
+    env::set_var("HOST", "x86_64-unknown-linux-gnu");
+    let lib = find("staticpath").unwrap();
+    assert_eq!(lib.link_files.len(), 1);
+    assert!(lib.link_files[0].ends_with("libstaticprobe.a"));
+}

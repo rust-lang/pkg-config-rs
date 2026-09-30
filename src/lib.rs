@@ -883,6 +883,14 @@ impl Library {
         }
     }
 
+    /// Whether a file name denotes a static archive for `target`.
+    ///
+    /// A Windows `.lib` can be an import library, so the extension does not
+    /// determine the link kind there.
+    fn names_static_archive(target: &str, filename: &str) -> bool {
+        !target.contains("windows") && filename.ends_with(".a")
+    }
+
     fn parse_libs_cflags(&mut self, name: &str, output: &[u8], config: &Config) {
         let target = env::var("TARGET");
         let is_msvc = target
@@ -1017,7 +1025,17 @@ impl Library {
                                         format!("rustc-link-search={}", dir.display());
                                     config.print_metadata(&link_search);
 
-                                    let link_lib = format!("rustc-link-lib={}", lib_basename);
+                                    // The file name selects the link kind. A bare `-l` would let
+                                    // the linker prefer a shared library of the same base name in
+                                    // the same directory, which the named path excludes.
+                                    let link_lib = if Self::names_static_archive(
+                                        target,
+                                        &file_name.to_string_lossy(),
+                                    ) {
+                                        format!("rustc-link-lib=static={}", lib_basename)
+                                    } else {
+                                        format!("rustc-link-lib={}", lib_basename)
+                                    };
                                     config.print_metadata(&link_lib);
                                     self.link_files.push(PathBuf::from(path));
                                 }
@@ -1190,6 +1208,19 @@ mod tests {
             Library::extract_lib_from_filename(target, filename),
             Some("foo")
         );
+    }
+
+    #[test]
+    fn names_static_archive_linux() {
+        let t = "x86_64-unknown-linux-gnu";
+        assert!(Library::names_static_archive(t, "libfoo.a"));
+        assert!(!Library::names_static_archive(t, "libfoo.so"));
+    }
+
+    #[test]
+    fn names_static_archive_windows_lib_is_ambiguous() {
+        let t = "x86_64-pc-windows-msvc";
+        assert!(!Library::names_static_archive(t, "foo.lib"));
     }
 
     #[test]
