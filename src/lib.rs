@@ -84,7 +84,7 @@
 
 #![doc(html_root_url = "https://docs.rs/pkg-config/0.3")]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::error;
 use std::ffi::{OsStr, OsString};
@@ -123,6 +123,8 @@ pub struct Config {
 pub struct Library {
     /// Libraries specified by -l
     pub libs: Vec<String>,
+    /// Libraries which are to be included with --whole-archive
+    pub whole_archive_libs: Vec<String>,
     /// Library search paths specified by -L
     pub link_paths: Vec<PathBuf>,
     /// Library file paths specified without -l
@@ -812,6 +814,7 @@ impl Library {
     fn new() -> Library {
         Library {
             libs: Vec::new(),
+            whole_archive_libs: Vec::new(),
             link_paths: Vec::new(),
             link_files: Vec::new(),
             include_paths: Vec::new(),
@@ -914,6 +917,9 @@ impl Library {
 
         let words = split_flags(output);
 
+        let mut whole_archive_depth = 0;
+        let mut added_libs = HashSet::new();
+
         // Handle single-character arguments like `-I/usr/include`
         let parts = words
             .iter()
@@ -941,19 +947,46 @@ impl Library {
                         continue;
                     }
 
-                    if val.starts_with(':') {
-                        // Pass this flag to linker directly.
-                        let meta = format!("rustc-link-arg={}{}", flag, val);
-                        config.print_metadata(&meta);
-                    } else if statik && is_static_available(val, &system_roots, &dirs) {
-                        let meta = format!("rustc-link-lib=static={}", val);
-                        config.print_metadata(&meta);
-                    } else {
-                        let meta = format!("rustc-link-lib={}", val);
-                        config.print_metadata(&meta);
+                    // static libraries with +whole-archive only
+                    let whole_archive = statik && whole_archive_depth > 0;
+
+                    let val = whole_archive
+                        .then_some(val)
+                        .and_then(|val| val.strip_prefix(":lib"))
+                        .and_then(|val| val.strip_suffix(".a"))
+                        .unwrap_or(val);
+
+                    // adding a library multiple times with different modifiers is not allowed by
+                    // rustc, but can be allowed by c compilers
+                    if added_libs.contains(&val) {
+                        continue;
                     }
 
-                    self.libs.push(val.to_string());
+                    let mut push_to_whole_archive = false;
+                    let meta = if val.starts_with(':') {
+                        // Pass this flag to linker directly.
+                        format!("rustc-link-arg={}{}", flag, val)
+                    } else {
+                        let static_available = is_static_available(val, &system_roots, &dirs);
+                        added_libs.insert(val);
+
+                        if whole_archive {
+                            push_to_whole_archive = true;
+                            format!("rustc-link-lib=static:+whole-archive={}", val)
+                        } else if statik && static_available {
+                            format!("rustc-link-lib=static={}", val)
+                        } else {
+                            format!("rustc-link-lib={}", val)
+                        }
+                    };
+
+                    config.print_metadata(&meta);
+
+                    if push_to_whole_archive {
+                        self.whole_archive_libs.push(val.to_string());
+                    } else {
+                        self.libs.push(val.to_string());
+                    }
                 }
                 "-D" => {
                     let mut iter = val.split('=');
@@ -966,6 +999,16 @@ impl Library {
                     let meta = format!("rustc-link-arg=-Wl,-u,{}", val);
                     config.print_metadata(&meta);
                 }
+                "-W" => {
+                    if let Some(val) = val.strip_prefix("l,") {
+                        if val == "--whole-archive" {
+                            whole_archive_depth += 1;
+                        } else if val == "--no-whole-archive" && whole_archive_depth > 0 {
+                            whole_archive_depth -= 1;
+                        }
+                    }
+                }
+
                 _ => {}
             }
         }

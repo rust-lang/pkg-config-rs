@@ -1,0 +1,7 @@
+prefix=/usr/local
+
+Name: duplicate
+Version: 4.2.0
+Description: Duplicate Libraries Example
+Libs: -L${prefix}/lib -Wl,-rpath,${prefix}/lib -lrpath -lrpath
+Cflags: -I${prefix}/include

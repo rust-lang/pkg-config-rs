@@ -1,0 +1,4 @@
+Name: wholearchive
+Description: Whole-archive test fixture
+Version: 1.0
+Libs.private: -Wl,--whole-archive -l:librte_eal.a -Wl,--no-whole-archive
