@@ -1,0 +1,6 @@
+# libstaticprobe.a is an empty placeholder: parse_libs_cflags only calls
+# is_file() on the path it finds here.
+Name: staticpath
+Version: 1.0.0
+Description: A package whose Libs names an archive by file path
+Libs: ${pcfiledir}/libstaticprobe.a
