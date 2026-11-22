@@ -12,6 +12,8 @@ fn reset() {
             || k.contains("PKG_CONFIG_ALLOW_CROSS")
             || k.contains("PKG_CONFIG_SYSROOT_DIR")
             || k.contains("FOO_NO_PKG_CONFIG")
+            || k.contains("FOO_FORCE_PKG_CONFIG")
+            || k.contains("ALL_FORCE_PKG_CONFIG")
         {
             env::remove_var(&k);
         }
@@ -311,4 +313,46 @@ fn rpath() {
     assert!(lib
         .ld_args
         .contains(&vec!["-rpath".to_string(), "/usr/local/lib".to_string(),]));
+}
+
+#[test]
+#[should_panic]
+fn specific_force_pkg_config() {
+    let _g = LOCK.lock();
+    reset();
+
+    env::set_var("PKG_CONFIG_PATH", "");
+    env::set_var("FOO_FORCE_PKG_CONFIG", "1");
+    let _ = find("foo");
+}
+
+#[test]
+#[should_panic]
+fn all_force_pkg_config() {
+    let _g = LOCK.lock();
+    reset();
+
+    env::set_var("ALL_FORCE_PKG_CONFIG", "1");
+    find("foo").unwrap();
+    let _ = find("noexist");
+}
+
+#[test]
+fn all_force_pkg_config_success() {
+    let _g = LOCK.lock();
+    reset();
+
+    env::set_var("ALL_FORCE_PKG_CONFIG", "1");
+    let _ = find("foo");
+    let _ = find("rpath");
+}
+
+#[test]
+fn specific_force_pkg_config_success() {
+    let _g = LOCK.lock();
+    reset();
+
+    env::set_var("FOO_FORCE_PKG_CONFIG", "1");
+    find("foo").unwrap();
+    let _ = find("noexist");
 }
