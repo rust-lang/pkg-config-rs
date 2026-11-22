@@ -17,6 +17,11 @@
 //! * `FOO_NO_PKG_CONFIG` - if set, this will disable running `pkg-config` when
 //!   probing for the library named `foo`.
 //!
+//! * `ALL_FORCE_PKG_CONFIG` - if set, this will panic on any probe failures.
+//!
+//! * `FOO_FORCE_PKG_CONFIG` - if set, this will panic on any probe failures
+//!   when probing for the library name `foo`.
+//!
 //! ### Linking
 //!
 //! There are also a number of environment variables which can configure how a
@@ -589,11 +594,8 @@ impl Config {
         self.probe(name).map_err(|e| e.to_string())
     }
 
-    /// Run `pkg-config` to find the library `name`.
-    ///
-    /// This will use all configuration previously set to specify how
-    /// `pkg-config` is run.
-    pub fn probe(&self, name: &str) -> Result<Library, Error> {
+    /// Internal implementation of probe that is always falliable
+    fn probe_impl(&self, name: &str) -> Result<Library, Error> {
         let abort_var_name = format!("{}_NO_PKG_CONFIG", envify(name));
         if self.env_var_os(&abort_var_name).is_some() {
             return Err(Error::EnvNoPkgConfig(abort_var_name));
@@ -622,6 +624,23 @@ impl Config {
         library.parse_modversion(str::from_utf8(&output).unwrap());
 
         Ok(library)
+    }
+
+    /// Run `pkg-config` to find the library `name`.
+    ///
+    /// This will use all configuration previously set to specify how
+    /// `pkg-config` is run.
+    pub fn probe(&self, name: &str) -> Result<Library, Error> {
+        let probe_result = self.probe_impl(name);
+
+        let abort_var_name = format!("{}_FORCE_PKG_CONFIG", envify(name));
+        let is_forcing = self.env_var_os("ALL_FORCE_PKG_CONFIG").is_some()
+            || self.env_var_os(&abort_var_name).is_some();
+
+        match probe_result {
+            Err(err) if is_forcing => panic!("{err:?}"),
+            res => res,
+        }
     }
 
     /// True if pkg-config is used for the host system, or configured for cross-compilation
